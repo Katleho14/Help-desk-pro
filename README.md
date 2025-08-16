@@ -119,4 +119,5 @@ You need to run three processes simultaneously in separate terminals.
     npx inngest-cli dev -u http://localhost:3000/api/inngest
     ```
 
--   Your application will be running at `http://localhost:5173` (or your
+-   Your application will be running at `http://localhost:5173` (or your Vite port).
+-   The Inngest Dev Server dashboard will be at `http://localhost:8288`.
