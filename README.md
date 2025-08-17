@@ -1,123 +1,156 @@
-# AI-Powered Support Ticket Assistant
+AI-Powered Ticket Management System
+A smart ticket management system that uses AI to automatically categorize, prioritize, and assign support tickets to the most appropriate moderators.
 
-This is a full-stack application that provides an intelligent, automated solution for managing technical support tickets. It uses an AI agent to analyze, prioritize, and assign new tickets to the most suitable support agent based on required skills.
+🚀 Features
+AI-Powered Ticket Processing
 
----
+Automatic ticket categorization
+Smart priority assignment
+Skill-based moderator matching
+AI-generated helpful notes for moderators
+Smart Moderator Assignment
 
-## ✨ Features
+Automatic matching of tickets to moderators based on skills
+Fallback to admin assignment if no matching moderator found
+Skill-based routing system
+User Management
 
-- **User Authentication:** Secure JWT-based signup and login for users and agents/admins.
-- **Role-Based Access Control:**
-  - **Users:** Can create, view, and track their own support tickets.
-  - **Admins/Agents:** Can view and manage all tickets in the system via a central dashboard.
-- **AI-Powered Ticket Analysis:**
-  - When a ticket is created, an automated background workflow is triggered using **Inngest**.
-  - A **Gemini AI agent** analyzes the ticket to generate a summary, priority level, helpful technical notes, and a list of required skills.
-- **Intelligent Agent Assignment:** The system automatically assigns tickets to an agent whose skills match the ticket's needs.
-- **Email Notifications:** Agents receive an email notification (tested via Mailtrap) when a new ticket is assigned to them.
-- **Ticket Management:** View ticket details, including AI analysis, and update ticket status.
+Role-based access control (User, Moderator, Admin)
+Skill management for moderators
+User authentication with JWT
+Background Processing
 
----
+Event-driven architecture using Inngest
+Automated email notifications
+Asynchronous ticket processing
+🛠️ Tech Stack
+Backend: Node.js with Express
+Database: MongoDB
+Authentication: JWT
+Background Jobs: Inngest
+AI Integration: Google Gemini API
+Email: Nodemailer with Mailtrap
+Development: Nodemon for hot reloading
+📋 Prerequisites
+Node.js (v14 or higher)
+MongoDB
+Google Gemini API key
+Mailtrap account (for email testing)
+⚙️ Installation
+Clone the repository
 
-## 🛠️ Tech Stack
+git clone <repository-url>
+cd ai-ticket-assistant
+Install dependencies
 
-- **Frontend:** React, Vite, Tailwind CSS, react-router-dom, react-toastify
-- **Backend:** Node.js, Express.js, Mongoose
-- **Database:** MongoDB
-- **Authentication:** JWT, bcrypt
-- **Background Workflows:** Inngest
-- **AI:** Google Gemini (`@inngest/agent-kit`)
-- **Email:** Nodemailer, Mailtrap (for development)
+npm install
+Environment Setup Create a .env file in the root directory with the following variables:
 
----
+# MongoDB
+MONGO_URI=your_mongodb_uri
 
-## 🚀 Getting Started
+# JWT
+JWT_SECRET=your_jwt_secret
 
-### Prerequisites
+# Email (Mailtrap)
+MAILTRAP_SMTP_HOST=your_mailtrap_host
+MAILTRAP_SMTP_PORT=your_mailtrap_port
+MAILTRAP_SMTP_USER=your_mailtrap_user
+MAILTRAP_SMTP_PASS=your_mailtrap_password
 
-- Node.js and npm
-- MongoDB Atlas account (or a local MongoDB instance)
-- Mailtrap account (for email testing)
-- Google AI Studio API Key (for Gemini)
+# AI (Gemini)
+GEMINI_API_KEY=your_gemini_api_key
 
-### Backend Setup
+# Application
+APP_URL=http://localhost:3000
+🚀 Running the Application
+Start the main server
 
-1.  **Clone the repository and navigate to the `backend` directory:**
-    ```bash
-    cd backend
-    ```
+npm run dev
+Start the Inngest dev server
 
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
+npm run inngest-dev
+📝 API Endpoints
+Authentication
+POST /api/auth/signup - Register a new user
+POST /api/auth/login - Login and get JWT token
+Tickets
+POST /api/tickets - Create a new ticket
+GET /api/tickets - Get all tickets for logged-in user
+GET /api/tickets/:id - Get ticket details
+Admin
+GET /api/auth/users - Get all users (Admin only)
+POST /api/auth/update-user - Update user role & skills (Admin only)
+🔄 Ticket Processing Flow
+Ticket Creation
 
-3.  **Create a `.env` file** in the `backend` root and add the following variables:
-    ```env
-    # Server
-    PORT=3000
+User submits a ticket with title and description
+System creates initial ticket record
+AI Processing
 
-    # MongoDB
-    MONGO_URI=your_mongodb_connection_string
+Inngest triggers on-ticket-created event
+AI analyzes ticket content
+Generates:
+Required skills
+Priority level
+Helpful notes
+Ticket type
+Moderator Assignment
 
-    # JWT
-    JWT_SECRET=your_jwt_secret_key
+System searches for moderators with matching skills
+Uses regex-based skill matching
+Falls back to admin if no match found
+Updates ticket with assignment
+Notification
 
-    # Inngest (optional, for connecting to Inngest Cloud)
-    INNGEST_EVENT_KEY=
-    INNGEST_SIGNING_KEY=
+Sends email to assigned moderator
+Includes ticket details and AI-generated notes
+🧪 Testing
+Start the Inngest dev server
 
-    # Mailtrap
-    MAIL_HOST=sandbox.smtp.mailtrap.io
-    MAIL_PORT=2525
-    MAIL_USERNAME=your_mailtrap_username
-    MAIL_PASSWORD=your_mailtrap_password
+npm run inngest-dev
+This will start the Inngest development server at http://localhost:8288
 
-    # Google Gemini
-    GEMINI_API_KEY=your_gemini_api_key
-    ```
+Test Ticket Creation
 
-### Frontend Setup
+curl -X POST http://localhost:3000/api/tickets \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer YOUR_JWT_TOKEN" \
+-d '{
+  "title": "Database Connection Issue",
+  "description": "Experiencing intermittent database connection timeouts"
+}'
+🔍 Troubleshooting
+Common Issues
+Port Conflicts If you see "address already in use" error:
 
-1.  **Navigate to the `frontend` directory:**
-    ```bash
-    cd ../frontend
-    ```
+# Find process using port 8288
+lsof -i :8288
+# Kill the process
+kill -9 <PID>
+AI Processing Errors
 
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
+Verify GEMINI_API_KEY in .env
+Check API quota and limits
+Validate request format
+Email Issues
 
-3.  **Create a `.env` file** in the `frontend` root and add your backend server URL:
-    ```env
-    VITE_SERVER_URL=http://localhost:3000
-    ```
+Verify Mailtrap credentials
+Check SMTP settings
+Monitor email delivery logs
+📚 Dependencies
+@inngest/agent-kit: ^0.7.3
+bcrypt: ^5.1.1
+cors: ^2.8.5
+dotenv: ^16.5.0
+express: ^5.1.0
+inngest: ^3.35.0
+jsonwebtoken: ^9.0.2
+mongoose: ^8.13.2
+nodemailer: ^6.10.1
 
----
-
-## 🏃‍♂️ Running the Application
-
-You need to run three processes simultaneously in separate terminals.
-
-1.  **Start the Backend Server:**
-    *(From the `backend` directory)*
-    ```bash
-    npm run dev
-    ```
-
-2.  **Start the Frontend Server:**
-    *(From the `frontend` directory)*
-    ```bash
-    npm run dev
-    ```
-
-3.  **Start the Inngest Dev Server:**
-    *(From the `backend` directory)*
-    This command explicitly connects the dev server to your backend API.
-    ```bash
-    npx inngest-cli dev -u http://localhost:3000/api/inngest
-    ```
-
--   Your application will be running at `http://localhost:5173` (or your Vite port).
--   The Inngest Dev Server dashboard will be at `http://localhost:8288`.
+🙏 Acknowledgments
+Inngest for background job processing
+Google Gemini for AI capabilities
+Mailtrap for email testing
+MongoDB for database
