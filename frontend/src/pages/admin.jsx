@@ -6,24 +6,33 @@ export default function AdminPanel() {
   const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState({ role: "", skills: "" });
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const limit = 5;
 
   const token = localStorage.getItem("token");
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [page]);
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/auth/users`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const res = await fetch(
+        `${import.meta.env.VITE_SERVER_URL}/auth/users?page=${page}&limit=${limit}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
       const data = await res.json();
       if (res.ok) {
-        setUsers(data);
-        setFilteredUsers(data);
+        setUsers(data.users);
+        setFilteredUsers(data.users);
+        setPages(data.pages);
       } else {
         console.error(data.error);
       }
@@ -76,16 +85,29 @@ export default function AdminPanel() {
   };
 
   const handleSearch = (e) => {
-    const query = e.target.value.toLowerCase();
-    setSearchQuery(query);
-    setFilteredUsers(
-      users.filter((user) => user.email.toLowerCase().includes(query))
-    );
+    setSearchQuery(e.target.value);
   };
+
+  // Debounce search query
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  // Filter users by debounced query
+  useEffect(() => {
+    const q = debouncedQuery.toLowerCase();
+    setFilteredUsers(
+      users.filter((u) => u.email.toLowerCase().includes(q))
+    );
+  }, [debouncedQuery, users]);
 
   return (
     <div className="max-w-4xl mx-auto mt-10">
       <h1 className="text-2xl font-bold mb-6">Admin Panel - Manage Users</h1>
+
       <input
         type="text"
         className="input input-bordered w-full mb-6"
@@ -93,6 +115,7 @@ export default function AdminPanel() {
         value={searchQuery}
         onChange={handleSearch}
       />
+
       {filteredUsers.map((user) => (
         <div
           key={user._id}
@@ -160,6 +183,27 @@ export default function AdminPanel() {
           )}
         </div>
       ))}
+
+      {/* Pagination */}
+      <div className="flex justify-between items-center mt-6">
+        <button
+          className="btn btn-outline"
+          disabled={page <= 1}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          Previous
+        </button>
+        <span>
+          Page {page} of {pages}
+        </span>
+        <button
+          className="btn btn-outline"
+          disabled={page >= pages}
+          onClick={() => setPage((p) => Math.min(p + 1, pages))}
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 }
