@@ -3,7 +3,7 @@
 
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import User from "./models/user.js";
+import User from '../backend/models/user.js';
 import bcrypt from "bcrypt";
 
 dotenv.config();
@@ -71,7 +71,7 @@ const users = [
 
 async function seed() {
   try {
-    await mongoose.connect(process.env.MONGO_URL);
+    await mongoose.connect(process.env.MONGO_URI);
     await User.deleteMany({});
     await User.insertMany(users);
     console.log("Seeded admin, moderator, and user!");

@@ -152,6 +152,17 @@ A smart ticket management system that uses AI to automatically categorize, prior
    ```bash
    npm run inngest-dev
    ```
+## 🚀 users 
+
+
+admin= admin@example.com
+password=admin123
+
+moderator= moderator@example.com
+password= mod123
+
+user= user@example.com
+password= user123
 
    This will start the Inngest development server at http://localhost:8288
 
