@@ -17,7 +17,7 @@ const app = express();
 // Allowed origins for CORS
 const allowedOrigins = [
   "http://localhost:5173", // local frontend (dev)
-  "https://helpdesk-frontend.vercel.app" // deployed frontend
+  "https://help-desk-pro-1.onrender.com" // deployed frontend
 ];
 
 app.use(cors({
