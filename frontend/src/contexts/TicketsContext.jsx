@@ -22,7 +22,7 @@ export function TicketsProvider({ children }) {
         });
 
         const res = await fetch(
-          `${import.meta.env.VITE_SERVER_URL}/tickets?${params}`,
+          `${import.meta.env.VITE_SERVER_URL}/api/tickets?${params}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }

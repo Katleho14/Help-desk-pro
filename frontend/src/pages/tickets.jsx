@@ -32,7 +32,7 @@ export default function Tickets() {
     setSubmitting(true);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_SERVER_URL}/tickets`,
+        `${import.meta.env.VITE_SERVER_URL}/api/tickets`,
         {
           method: "POST",
           headers: {
