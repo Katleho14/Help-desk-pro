@@ -1,6 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
+  "description": "Forcing a fresh build on Render.",
   "main": "index.js",
    "type": "module",
   "scripts": {
@@ -12,7 +13,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@inngest/agent-kit": "^0.9.0",
     "bcrypt": "^6.0.0",
