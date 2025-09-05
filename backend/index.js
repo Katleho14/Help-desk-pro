@@ -14,25 +14,10 @@ dotenv.config();
 const PORT = process.env.PORT || 3000;
 const app = express();
 
-// Allowed origins for CORS
-const allowedOrigins = [
-  "http://localhost:5173", // local frontend (dev)
-  "https://help-desk-pro-1.onrender.com" // deployed frontend
-];
+// This is a more permissive CORS configuration.
+// It allows requests from any origin, which is useful for debugging.
+app.use(cors());
 
-app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like Postman or curl)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = `CORS policy: Access denied from ${origin}`;
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true // allow cookies and auth headers
-}));
 
 // Middleware
 app.use(express.json());
