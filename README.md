@@ -152,17 +152,16 @@ A smart ticket management system that uses AI to automatically categorize, prior
    ```bash
    npm run inngest-dev
    ```
-## 🚀 users 
+## 🚀 Users
 
-
-admin= admin@example.com
-password=admin123
-
-moderator= moderator@example.com
-password= mod123
-
-user= user@example.com
-password= user123
+| Role      | Email                     | Password     |
+|-----------|---------------------------|--------------|
+| ADMIN     | admin@example.com         | admin123     |
+| MODERATOR | moderator@example.com     | mod123       |
+| USER      | user@example.com          | user123      |
+| ADMIN     | john.admin@company.com    | secure123    |
+| MODERATOR | sarah.mod@company.com     | moderator456 |
+| USER      | mike.user@company.com     | password789  |
 
    This will start the Inngest development server at http://localhost:8288
 
