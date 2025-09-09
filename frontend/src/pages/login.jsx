@@ -1,18 +1,30 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+    // Clear error when user starts typing
+    if (error) setError("");
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
+
+    // Basic validation
+    if (!form.email || !form.password) {
+      setError("Please fill in all fields");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/auth/login`, {
         method: "POST",
@@ -25,15 +37,19 @@ export default function Login() {
       const data = await res.json();
 
       if (res.ok) {
+        // Store token and user data
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
+        
+        // Navigate to home page
         navigate("/");
       } else {
-        alert(data.message || "Login failed");
+        // Handle error response - backend sends 'error' field
+        setError(data.error || data.message || "Login failed");
       }
     } catch (err) {
-      alert("Something went wrong");
-      console.error(err);
+      console.error("Login error:", err);
+      setError("Network error. Please check your connection.");
     } finally {
       setLoading(false);
     }
@@ -45,34 +61,68 @@ export default function Login() {
         <form onSubmit={handleLogin} className="card-body">
           <h2 className="card-title justify-center">Login</h2>
 
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            className="input input-bordered"
-            value={form.email}
-            onChange={handleChange}
-            required
-          />
+          {error && (
+            <div className="alert alert-error mb-4">
+              <span>{error}</span>
+            </div>
+          )}
 
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            className="input input-bordered"
-            value={form.password}
-            onChange={handleChange}
-            required
-          />
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text">Email</span>
+            </label>
+            <input
+              type="email"
+              name="email"
+              placeholder="Enter your email"
+              className="input input-bordered"
+              value={form.email}
+              onChange={handleChange}
+              required
+              autoComplete="email"
+            />
+          </div>
 
-          <div className="form-control mt-4">
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text">Password</span>
+            </label>
+            <input
+              type="password"
+              name="password"
+              placeholder="Enter your password"
+              className="input input-bordered"
+              value={form.password}
+              onChange={handleChange}
+              required
+              autoComplete="current-password"
+            />
+          </div>
+
+          <div className="form-control mt-6">
             <button
               type="submit"
               className="btn btn-primary w-full"
               disabled={loading}
             >
-              {loading ? "Logging in..." : "Login"}
+              {loading ? (
+                <>
+               <span className="loading loading-spinner loading-sm"></span>
+                  Logging in...
+                </>
+              ) : (
+                "Login"
+              )}
             </button>
+          </div>
+
+          <div className="divider">OR</div>
+          
+          <div className="text-center">
+            <span className="text-sm">Don't have an account? </span>
+            <Link to="/signup" className="link link-primary text-sm">
+              Sign up
+            </Link>
           </div>
         </form>
       </div>

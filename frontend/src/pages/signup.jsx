@@ -1,18 +1,53 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 export default function SignupPage() {
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({ email: "", password: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+    // Clear error when user starts typing
+    if (error) setError("");
+  };
+
+  const validateForm = () => {
+    if (!form.email || !form.password) {
+      setError("Please fill in all required fields");
+      return false;
+    }
+
+    if (form.password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return false;
+    }
+
+    if (form.confirmPassword && form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
+      return false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email)) {
+      setError("Please enter a valid email address");
+      return false;
+    }
+
+    return true;
   };
 
   const handleSignup = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
+
+    if (!validateForm()) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(
         `${import.meta.env.VITE_SERVER_URL}/api/auth/signup`,
@@ -21,22 +56,29 @@ export default function SignupPage() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(form),
+          body: JSON.stringify({
+            email: form.email,
+            password: form.password
+          }),
         }
       );
 
       const data = await res.json();
 
       if (res.ok) {
+        // Store token and user data
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
+        
+        // Navigate to home page
         navigate("/");
       } else {
-        alert(data.message || "Signup failed");
+        // Handle error response - backend sends 'error' field
+        setError(data.error || data.message || "Signup failed");
       }
     } catch (err) {
-      alert("Something went wrong");
-      console.error(err);
+      console.error("Signup error:", err);
+      setError("Network error. Please check your connection.");
     } finally {
       setLoading(false);
     }
@@ -48,34 +90,84 @@ export default function SignupPage() {
         <form onSubmit={handleSignup} className="card-body">
           <h2 className="card-title justify-center">Sign Up</h2>
 
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            className="input input-bordered"
-            value={form.email}
-            onChange={handleChange}
-            required
-          />
+          {error && (
+            <div className="alert alert-error mb-4">
+              <span>{error}</span>
+            </div>
+          )}
 
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            className="input input-bordered"
-            value={form.password}
-            onChange={handleChange}
-            required
-          />
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text">Email</span>
+            </label>
+            <input
+              type="email"
+              name="email"
+              placeholder="Enter your email"
+              className="input input-bordered"
+              value={form.email}
+              onChange={handleChange}
+              required
+              autoComplete="email"
+            />
+          </div>
 
-          <div className="form-control mt-4">
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text">Password</span>
+            </label>
+            <input
+              type="password"
+              name="password"
+              placeholder="Enter your password (min 6 chars)"
+              className="input input-bordered"
+              value={form.password}
+              onChange={handleChange}
+              required
+              autoComplete="new-password"
+              minLength="6"
+            />
+          </div>
+
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text">Confirm Password</span>
+            </label>
+            <input
+              type="password"
+              name="confirmPassword"
+              placeholder="Confirm your password"
+              className="input input-bordered"
+              value={form.confirmPassword}
+              onChange={handleChange}
+              autoComplete="new-password"
+            />
+          </div>
+
+          <div className="form-control mt-6">
             <button
               type="submit"
               className="btn btn-primary w-full"
               disabled={loading}
             >
-              {loading ? "Signing up..." : "Sign Up"}
+              {loading ? (
+                <>
+                  <span className="loading loading-spinner loading-sm"></span>
+                  Signing up...
+                </>
+              ) : (
+                "Sign Up"
+              )}
             </button>
+          </div>
+
+          <div className="divider">OR</div>
+          
+          <div className="text-center">
+            <span className="text-sm">Already have an account? </span>
+            <Link to="/login" className="link link-primary text-sm">
+              Login
+            </Link>
           </div>
         </form>
       </div>
