@@ -109,7 +109,7 @@ export default function Tickets() {
       ) : (
         <>
           <div className="space-y-3">
-            {tickets.map((ticket) => (
+            {tickets && tickets.map((ticket) => (
               <Link
                 key={ticket._id}
                 className="card shadow-md p-4 bg-gray-400"
@@ -123,7 +123,7 @@ export default function Tickets() {
                 </p>
               </Link>
             ))}
-            {tickets.length === 0 && <p>No tickets found.</p>}
+            {tickets && tickets.length === 0 && <p>No tickets found.</p>}
           </div>
 
           {/* Pagination */}
