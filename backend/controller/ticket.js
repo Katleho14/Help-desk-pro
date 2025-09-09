@@ -9,7 +9,7 @@ export const createTicket = async (req, res) => {
         .status(400)
         .json({ message: "Title and description are required" });
     }
-    const newTicket = Ticket.create({
+    const newTicket = await Ticket.create({
       title,
       description,
       createdBy: req.user._id.toString(),
@@ -18,7 +18,7 @@ export const createTicket = async (req, res) => {
     await inngest.send({
       name: "ticket/created",
       data: {
-        ticketId: (await newTicket)._id.toString(),
+        ticketId: newTicket._id.toString(),
         title,
         description,
         createdBy: req.user._id.toString(),
@@ -37,17 +37,40 @@ export const createTicket = async (req, res) => {
 export const getTickets = async (req, res) => {
   try {
     const user = req.user;
-    let tickets = [];
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const priority = req.query.priority;
+
+    let query = {};
+    if (priority) {
+      query.priority = priority;
+    }
+
+    let ticketsQuery;
     if (user.role !== "user") {
-      tickets = Ticket.find({})
+      ticketsQuery = Ticket.find(query)
         .populate("assignedTo", ["email", "_id"])
         .sort({ createdAt: -1 });
     } else {
-      tickets = await Ticket.find({ createdBy: user._id })
-        .select("title description status createdAt")
+      query.createdBy = user._id;
+      ticketsQuery = Ticket.find(query)
+        .select("title description status createdAt priority")
         .sort({ createdAt: -1 });
     }
-    return res.status(200).json(tickets);
+
+    const tickets = await ticketsQuery
+      .limit(limit)
+      .skip((page - 1) * limit)
+      .exec();
+
+    const count = await Ticket.countDocuments(query);
+    const pages = Math.ceil(count / limit);
+
+    return res.status(200).json({
+      tickets,
+      pages,
+      page,
+    });
   } catch (error) {
     console.error("Error fetching tickets", error.message);
     return res.status(500).json({ message: "Internal Server Error" });
