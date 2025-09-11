@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { inngest } from "../inngest/client.js";
 import Ticket from "../models/ticket.js";
 
@@ -9,6 +10,7 @@ export const createTicket = async (req, res) => {
         .status(400)
         .json({ message: "Title and description are required" });
     }
+
     const newTicket = await Ticket.create({
       title,
       description,
@@ -24,6 +26,7 @@ export const createTicket = async (req, res) => {
         createdBy: req.user._id.toString(),
       },
     });
+
     return res.status(201).json({
       message: "Ticket created and processing started",
       ticket: newTicket,
@@ -54,7 +57,7 @@ export const getTickets = async (req, res) => {
     } else {
       query.createdBy = user._id;
       ticketsQuery = Ticket.find(query)
-        .select("title description status createdAt priority")
+        .select("title description status priority createdAt helpfulNotes relatedSkills")
         .sort({ createdAt: -1 });
     }
 
@@ -80,26 +83,34 @@ export const getTickets = async (req, res) => {
 export const getTicket = async (req, res) => {
   try {
     const user = req.user;
+    const { id } = req.params;
+
+    // ✅ Validate ObjectId to avoid CastError
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid ticket ID" });
+    }
+
     let ticket;
 
     if (user.role !== "user") {
-      ticket = await Ticket.findById(req.params.id).populate("assignedTo", [
+      ticket = await Ticket.findById(id).populate("assignedTo", [
         "email",
         "_id",
       ]);
     } else {
       ticket = await Ticket.findOne({
         createdBy: user._id,
-        _id: req.params.id,
-      }).select("title description status createdAt priority");
+        _id: id,
+      }).select("title description status priority createdAt helpfulNotes relatedSkills");
     }
 
     if (!ticket) {
       return res.status(404).json({ message: "Ticket not found" });
     }
+
     return res.status(200).json({ ticket });
   } catch (error) {
-    console.error("Error fetching ticket", error.message);
-    return res.status(500).json({ message: "Internal Server Error" });
+    console.error("Error fetching ticket:", error);
+    return res.status(500).json({ message: "Server error fetching ticket" });
   }
 };
