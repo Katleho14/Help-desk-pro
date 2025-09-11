@@ -11,8 +11,9 @@ export const onTicketCreated = inngest.createFunction(
   async ({ event, step }) => {
     try {
       const { ticketId } = event.data;
+      console.log("🎟️ Ticket event received:", event.data);
 
-      // 1. Fetch ticket
+      // Step 1: Fetch ticket
       const ticket = await step.run("fetch-ticket", async () => {
         const ticketObject = await Ticket.findById(ticketId);
         if (!ticketObject) {
@@ -21,31 +22,43 @@ export const onTicketCreated = inngest.createFunction(
         return ticketObject;
       });
 
-      // 2. Temporary placeholder
-      await step.run("set-status-placeholder", async () => {
-        await Ticket.findByIdAndUpdate(ticket._id, { status: "PROCESSING" });
+      console.log("📌 Ticket fetched:", ticket);
+
+      // Step 2: Set initial status
+      await step.run("update-ticket-status", async () => {
+        await Ticket.findByIdAndUpdate(ticket._id, { status: "TODO" });
       });
 
-      // 3. Get AI analysis
+      // Step 3: AI Analysis
+      console.log("🤖 Sending ticket to AI...");
       const aiResponse = await analyzeTicket(ticket);
 
-      // 4. Update ticket with AI data
+      console.log("🧠 Raw AI Response:", aiResponse);
+
       const relatedskills = await step.run("ai-processing", async () => {
+        let skills = [];
         if (aiResponse) {
-          await Ticket.findByIdAndUpdate(ticket._id, {
-            priority: ["low", "medium", "high"].includes(aiResponse.priority)
+          const priority =
+            ["low", "medium", "high"].includes(aiResponse.priority)
               ? aiResponse.priority
-              : "medium",
-            helpfulNotes: aiResponse.helpfulNotes,
-            relatedSkills: aiResponse.relatedSkills,
-            status: aiResponse.summary || "IN_PROGRESS", // 👈 AI replaces TODO
+              : "medium";
+
+          await Ticket.findByIdAndUpdate(ticket._id, {
+            priority,
+            helpfulNotes: aiResponse.helpfulNotes || "",
+            status: "IN_PROGRESS",
+            relatedSkills: aiResponse.relatedSkills || [],
+            summary: aiResponse.summary || "",
           });
-          return aiResponse.relatedSkills || [];
+
+          skills = aiResponse.relatedSkills || [];
+        } else {
+          console.error("❌ No AI response received, ticket left as TODO.");
         }
-        return [];
+        return skills;
       });
 
-      // 5. Assign a moderator
+      // Step 4: Assign moderator
       const moderator = await step.run("assign-moderator", async () => {
         let user = await User.findOne({
           role: "moderator",
@@ -56,7 +69,6 @@ export const onTicketCreated = inngest.createFunction(
             },
           },
         });
-
         if (!user) {
           user = await User.findOne({ role: "admin" });
         }
@@ -65,25 +77,27 @@ export const onTicketCreated = inngest.createFunction(
           assignedTo: user?._id || null,
         });
 
+        console.log("👤 Assigned moderator:", user?.email || "None");
         return user;
       });
 
-      // 6. Send email
+      // Step 5: Notify moderator
       await step.run("send-email-notification", async () => {
         if (moderator) {
           const finalTicket = await Ticket.findById(ticket._id);
           await sendMail(
             moderator.email,
             "Ticket Assigned",
-            `A new ticket has been assigned to you: ${finalTicket.title}`
+            `A new ticket is assigned to you: ${finalTicket.title}`
           );
         }
       });
 
+      console.log("✅ Ticket processing completed.");
       return { success: true };
     } catch (err) {
-      console.error("❌ Error running the step", err.message);
-      return { success: false };
+      console.error("❌ Error running onTicketCreated:", err.message, err);
+      return { success: false, error: err.message };
     }
   }
 );
