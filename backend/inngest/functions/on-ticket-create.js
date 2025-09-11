@@ -12,7 +12,7 @@ export const onTicketCreated = inngest.createFunction(
     try {
       const { ticketId } = event.data;
 
-      //fetch ticket from DB
+      // 1. Fetch ticket
       const ticket = await step.run("fetch-ticket", async () => {
         const ticketObject = await Ticket.findById(ticketId);
         if (!ticketObject) {
@@ -21,28 +21,31 @@ export const onTicketCreated = inngest.createFunction(
         return ticketObject;
       });
 
-      await step.run("update-ticket-status", async () => {
-        await Ticket.findByIdAndUpdate(ticket._id, { status: "TODO" });
+      // 2. Temporary placeholder
+      await step.run("set-status-placeholder", async () => {
+        await Ticket.findByIdAndUpdate(ticket._id, { status: "PROCESSING" });
       });
 
+      // 3. Get AI analysis
       const aiResponse = await analyzeTicket(ticket);
 
+      // 4. Update ticket with AI data
       const relatedskills = await step.run("ai-processing", async () => {
-        let skills = [];
         if (aiResponse) {
           await Ticket.findByIdAndUpdate(ticket._id, {
-            priority: !["low", "medium", "high"].includes(aiResponse.priority)
-              ? "medium"
-              : aiResponse.priority,
+            priority: ["low", "medium", "high"].includes(aiResponse.priority)
+              ? aiResponse.priority
+              : "medium",
             helpfulNotes: aiResponse.helpfulNotes,
-            status: "IN_PROGRESS",
             relatedSkills: aiResponse.relatedSkills,
+            status: aiResponse.summary || "IN_PROGRESS", // 👈 AI replaces TODO
           });
-          skills = aiResponse.relatedSkills;
+          return aiResponse.relatedSkills || [];
         }
-        return skills;
+        return [];
       });
 
+      // 5. Assign a moderator
       const moderator = await step.run("assign-moderator", async () => {
         let user = await User.findOne({
           role: "moderator",
@@ -53,24 +56,26 @@ export const onTicketCreated = inngest.createFunction(
             },
           },
         });
+
         if (!user) {
-          user = await User.findOne({
-            role: "admin",
-          });
+          user = await User.findOne({ role: "admin" });
         }
+
         await Ticket.findByIdAndUpdate(ticket._id, {
           assignedTo: user?._id || null,
         });
+
         return user;
       });
 
+      // 6. Send email
       await step.run("send-email-notification", async () => {
         if (moderator) {
           const finalTicket = await Ticket.findById(ticket._id);
           await sendMail(
             moderator.email,
             "Ticket Assigned",
-            `A new ticket is assigned to you ${finalTicket.title}`
+            `A new ticket has been assigned to you: ${finalTicket.title}`
           );
         }
       });
