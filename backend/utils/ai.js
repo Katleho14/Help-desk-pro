@@ -1,28 +1,10 @@
-import { createAgent, gemini } from "@inngest/agent-kit";
-import dotenv from 'dotenv';
+
+import { OpenAI } from "openai";
+import dotenv from "dotenv";
 dotenv.config();
 
-const supportAgent = createAgent({
-    model: gemini({
-        model: "gemini-1.5-flash-8b",
-        apiKey: process.env.GEMINI_API_KEY,
-    }),
-    name: "AI Ticket Triage Assistant",
-    system: `You are an expert AI assistant that processes technical support tickets.
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-Your job is to:
-1. Summarize the issue.
-2. Estimate its priority.
-3. Provide helpful notes and resource links for human moderators.
-4. List relevant technical skills required.
-
-IMPORTANT:
-- Respond with *only* valid raw JSON.
-- Do NOT include markdown, code fences, comments, or any extra formatting.
-- The format must be a raw JSON object.
-
-Repeat: Do not wrap your output in markdown or code fences.`,
-});
 
 const analyzeTicket = async (ticket) => {
     const prompt = `You are a ticket triage agent. Only return a strict JSON object with no extra text, headers, or markdown.
@@ -52,23 +34,25 @@ Ticket information:
 `;
 
     try {
-        const response = await supportAgent.run(prompt);
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4o-mini", // Use OpenAI's gpt-4o-mini model
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.2,
+        });
 
-        const rawContent =
-            response.output?.[0]?.content ||
-            response.output?.[0]?.context ||
-            response.output?.[0]?.data ||
-            "";
-
+        const rawContent = completion.choices[0]?.message?.content || "";
+        console.log("🤖 Raw OpenAI output:", rawContent);
 
         const match = rawContent.match(/\{[\s\S]*\}/);
         if (!match) {
+            console.error("🚨 No valid JSON object found in AI response.");
             throw new Error("No valid JSON object found in AI response.");
         }
 
         let parsed;
         try {
             parsed = JSON.parse(match[0]);
+            console.log("✅ Parsed AI JSON:", parsed);
         } catch (err) {
             console.error("🚨 JSON parse error:", err.message);
             throw err;
@@ -76,9 +60,8 @@ Ticket information:
 
         return parsed;
 
-
     } catch (error) {
-        console.error("🚨 AI Error:", error);
+        console.error("🚨 OpenAI Error:", error);
         throw error;
     }
 };
