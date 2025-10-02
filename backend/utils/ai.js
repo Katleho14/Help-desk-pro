@@ -35,7 +35,7 @@ Ticket information:
 
     try {
         const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini", // Use OpenAI's gpt-4o-mini model
+            model: "gpt-4o", // Use OpenAI's gpt-4o model
             messages: [{ role: "user", content: prompt }],
             temperature: 0.2,
         });
