@@ -43,22 +43,43 @@ Ticket information:
         const rawContent = completion.choices[0]?.message?.content || "";
         console.log("🤖 Raw OpenAI output:", rawContent);
 
-        const match = rawContent.match(/\{[\s\S]*\}/);
-        if (!match) {
-            console.error("🚨 No valid JSON object found in AI response.");
-            throw new Error("No valid JSON object found in AI response.");
-        }
-
         let parsed;
         try {
-            parsed = JSON.parse(match[0]);
-            console.log("✅ Parsed AI JSON:", parsed);
+            // First, try to parse the entire response as JSON
+            parsed = JSON.parse(rawContent.trim());
+            console.log("✅ Parsed AI JSON directly:", parsed);
         } catch (err) {
-            console.error("🚨 JSON parse error:", err.message);
-            throw err;
+            console.log("🚨 Direct JSON parse failed, trying to extract JSON from response.");
+            // If direct parse fails, try to extract JSON using regex
+            const match = rawContent.match(/\{[\s\S]*\}/);
+            if (!match) {
+                console.error("🚨 No valid JSON object found in AI response.");
+                throw new Error("No valid JSON object found in AI response.");
+            }
+            try {
+                parsed = JSON.parse(match[0]);
+                console.log("✅ Parsed AI JSON from extracted match:", parsed);
+            } catch (parseErr) {
+                console.error("🚨 JSON parse error on extracted match:", parseErr.message);
+                throw parseErr;
+            }
         }
 
-        return parsed;
+        // Validate the parsed response
+        if (!parsed || typeof parsed !== 'object') {
+            throw new Error("Invalid AI response structure");
+        }
+
+        // Ensure required fields with defaults
+        const validatedResponse = {
+            summary: parsed.summary || "No summary provided",
+            priority: ["low", "medium", "high"].includes(parsed.priority) ? parsed.priority : "medium",
+            helpfulNotes: parsed.helpfulNotes || "No helpful notes provided",
+            relatedSkills: Array.isArray(parsed.relatedSkills) ? parsed.relatedSkills : []
+        };
+
+        console.log("✅ Validated AI response:", validatedResponse);
+        return validatedResponse;
 
     } catch (error) {
         console.error("🚨 OpenAI Error:", error);
