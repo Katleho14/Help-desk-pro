@@ -35,7 +35,7 @@ Ticket information:
 
     try {
         const completion = await openai.chat.completions.create({
-            model: "gpt-4o", // Use OpenAI's gpt-4o model
+            model: "gpt-3.5-turbo", // Use OpenAI's gpt-3.5-turbo model
             messages: [{ role: "user", content: prompt }],
             temperature: 0.2,
         });
