@@ -50,18 +50,31 @@ Ticket information:
             console.log("✅ Parsed AI JSON directly:", parsed);
         } catch (err) {
             console.log("🚨 Direct JSON parse failed, trying to extract JSON from response.");
-            // If direct parse fails, try to extract JSON using regex
-            const match = rawContent.match(/\{[\s\S]*\}/);
+            // If direct parse fails, try to extract JSON using RegExp.exec()
+            const regex = /\{[\s\S]*\}/;
+            const match = regex.exec(rawContent);
             if (!match) {
                 console.error("🚨 No valid JSON object found in AI response.");
-                throw new Error("No valid JSON object found in AI response.");
+                // Handle the exception by returning a default response
+                return {
+                    summary: "No summary provided",
+                    priority: "medium",
+                    helpfulNotes: "No helpful notes provided",
+                    relatedSkills: []
+                };
             }
             try {
                 parsed = JSON.parse(match[0]);
                 console.log("✅ Parsed AI JSON from extracted match:", parsed);
             } catch (parseErr) {
                 console.error("🚨 JSON parse error on extracted match:", parseErr.message);
-                throw parseErr;
+                // Handle the exception by returning a default response
+                return {
+                    summary: "No summary provided",
+                    priority: "medium",
+                    helpfulNotes: "No helpful notes provided",
+                    relatedSkills: []
+                };
             }
         }
 
