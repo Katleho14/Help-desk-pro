@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "description": "Forcing a fresh build on Render.",
   "main": "index.js",
-   "type": "module",
+  "type": "module",
   "scripts": {
- "start": "node index.js",
+    "start": "node index.js",
     "dev": "nodemon index.js",
-     "inngest-dev" : "npx inngest-cli@latest dev",
-     "seed": "node seed.js"
+    "inngest-dev": "npx inngest-cli@latest dev",
+    "seed": "node seed.js"
   },
   "keywords": [],
   "author": "",
@@ -19,7 +19,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^4.19.2",
-    "inngest": "^3.40.1",
+    "inngest": "^3.44.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.17.1",
     "nodemailer": "^7.0.5",
