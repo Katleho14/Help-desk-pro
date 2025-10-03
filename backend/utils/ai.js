@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY?.trim(),
 });
 
 const analyzeTicket = async (ticket) => {
@@ -36,7 +36,7 @@ Ticket information:
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // ✅ Use latest lightweight model (you can change if needed)
+      model: "gpt-4o", // ✅ Use latest lightweight model (you can change if needed)
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
     });
