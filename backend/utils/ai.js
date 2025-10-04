@@ -1,5 +1,14 @@
 
 import { createAgent, openai } from "@inngest/agent-kit"; // use openai instead of gemini
+import { z } from "zod";
+
+// Zod schema for AI response validation
+const aiResponseSchema = z.object({
+  summary: z.string(),
+  priority: z.enum(["low", "medium", "high"]),
+  helpfulNotes: z.string(),
+  relatedSkills: z.array(z.string()),
+});
 
 const analyzeTicket = async (ticket) => {
   const supportAgent = createAgent({
@@ -54,7 +63,14 @@ Ticket information:
   try {
     const match = raw.match(/```json\s*([\s\S]*?)\s*```/i);
     const jsonString = match ? match[1] : raw.trim();
-    return JSON.parse(jsonString);
+    const parsed = JSON.parse(jsonString);
+    const validation = aiResponseSchema.safeParse(parsed);
+    if (validation.success) {
+      return validation.data;
+    } else {
+      console.log("AI response validation failed:", validation.error.message);
+      return null;
+    }
   } catch (e) {
     console.log("Failed to parse JSON from AI response: " + e.message);
     return null;

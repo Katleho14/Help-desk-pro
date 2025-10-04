@@ -1,0 +1,4 @@
+- [x] Import Zod in backend/utils/ai.js
+- [x] Define Zod schema for AI response (summary, priority, helpfulNotes, relatedSkills)
+- [x] Replace manual JSON parsing with Zod safeParse validation
+- [ ] Test the changes with Inngest dev
