@@ -57,7 +57,7 @@ export const getTickets = async (req, res) => {
     } else {
       query.createdBy = user._id;
       ticketsQuery = Ticket.find(query)
-        .select("title description status priority createdAt helpfulNotes relatedSkills")
+        .select("title description status priority createdAt helpfulNotes relatedSkills summary")
         .sort({ createdAt: -1 });
     }
 
@@ -101,7 +101,7 @@ export const getTicket = async (req, res) => {
       ticket = await Ticket.findOne({
         createdBy: user._id,
         _id: id,
-      }).select("title description status priority createdAt helpfulNotes relatedSkills");
+      }).select("title description status priority createdAt helpfulNotes relatedSkills summary");
     }
 
     if (!ticket) {
