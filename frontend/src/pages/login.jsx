@@ -129,7 +129,7 @@ export default function Login() {
                   <>
                     <span className="loading loading-spinner loading-sm"></span>
                     Logging in...
-                  </>
+                 </>
                 ) : (
                   <>
                     <LogIn className="w-5 h-5 mr-2" />
