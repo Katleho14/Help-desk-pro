@@ -1,3 +1,26 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900;
+    min-height: 100vh;
+  }
+  body {
+    @apply text-base-content;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer components {
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-xl hover:scale-105;
+  }
+  .btn-glow {
+    @apply shadow-lg hover:shadow-xl transition-shadow duration-300;
+  }
+  .input-focus {
+    @apply focus:ring-2 focus:ring-primary focus:border-primary;
+  }
+}

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
+import { ArrowLeft, Calendar, User, Tag, AlertTriangle, AlertCircle, Info, Clock, CheckCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function TicketDetailsPage() {
   const { id } = useParams();
@@ -37,67 +39,151 @@ export default function TicketDetailsPage() {
     fetchTicket();
   }, [id]);
 
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case "high": return "text-error bg-error/10 border-error/20";
+      case "medium": return "text-warning bg-warning/10 border-warning/20";
+      case "low": return "text-info bg-info/10 border-info/20";
+      default: return "text-base-content bg-base-200 border-base-300";
+    }
+  };
+
+  const getPriorityIcon = (priority) => {
+    switch (priority) {
+      case "high": return <AlertTriangle className="w-5 h-5" />;
+      case "medium": return <AlertCircle className="w-5 h-5" />;
+      case "low": return <Info className="w-5 h-5" />;
+      default: return <Info className="w-5 h-5" />;
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status?.toLowerCase()) {
+      case "open": return <Clock className="w-5 h-5 text-warning" />;
+      case "in progress": return <AlertCircle className="w-5 h-5 text-info" />;
+      case "resolved": return <CheckCircle className="w-5 h-5 text-success" />;
+      case "closed": return <CheckCircle className="w-5 h-5 text-base-content/50" />;
+      default: return <Clock className="w-5 h-5 text-base-content/50" />;
+    }
+  };
+
   if (loading)
-    return <div className="text-center mt-10">Loading ticket details...</div>;
-  if (!ticket) return <div className="text-center mt-10">Ticket not found</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <span className="loading loading-spinner loading-lg text-primary"></span>
+      </div>
+    );
+
+  if (!ticket)
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🎫</div>
+          <h2 className="text-2xl font-bold mb-2">Ticket not found</h2>
+          <Link to="/" className="btn btn-primary">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Tickets
+          </Link>
+        </div>
+      </div>
+    );
 
   return (
-    <div className="max-w-3xl mx-auto p-4">
-      <h2 className="text-2xl font-bold mb-4">Ticket Details</h2>
+    <div className="min-h-screen p-6 max-w-4xl mx-auto">
+      {/* Back Button */}
+      <Link to="/" className="btn btn-ghost btn-sm mb-6 hover:bg-base-200">
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to Tickets
+      </Link>
 
-      <div className="card bg-gray-400 shadow p-4 space-y-4">
-        <h3 className="text-xl font-semibold">{ticket.title}</h3>
-        <p>{ticket.description}</p>
-
-        {ticket.summary && (
-          <div>
-            <strong>Summary:</strong> {ticket.summary}
+      {/* Ticket Header */}
+      <div className="card bg-base-100 shadow-xl border border-base-300 mb-6 animate-fade-in">
+        <div className="card-body">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-primary mb-2">{ticket.title}</h1>
+              <div className="flex items-center gap-4 text-sm text-base-content/70">
+                <div className="flex items-center gap-1">
+                  <Calendar className="w-4 h-4" />
+                  {new Date(ticket.createdAt).toLocaleString()}
+                </div>
+                {ticket.assignedTo && (
+                  <div className="flex items-center gap-1">
+                    <User className="w-4 h-4" />
+                    Assigned to {ticket.assignedTo.email}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              {ticket.priority && (
+                <div className={`badge badge-outline ${getPriorityColor(ticket.priority)} px-3 py-2`}>
+                  <span className="flex items-center gap-1">
+                    {getPriorityIcon(ticket.priority)}
+                    {ticket.priority} Priority
+                  </span>
+                </div>
+              )}
+              {ticket.status && (
+                <div className="badge badge-outline px-3 py-2">
+                  <span className="flex items-center gap-1">
+                    {getStatusIcon(ticket.status)}
+                    {ticket.status}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-        )}
 
-        {/* Conditionally render extended details */}
-        {ticket.status && (
-          <>
-            <div className="divider">Metadata</div>
-            <p>
-              <strong>Status:</strong> {ticket.status}
-            </p>
-            {ticket.priority && (
-              <p>
-                <strong>Priority:</strong> {ticket.priority}
-              </p>
-            )}
+          {/* Description */}
+          <div className="prose max-w-none">
+            <h3 className="text-lg font-semibold mb-2">Description</h3>
+            <p className="text-base-content/80 leading-relaxed">{ticket.description}</p>
+          </div>
+
+          {/* Summary */}
+          {ticket.summary && (
+            <div className="mt-6 p-4 bg-primary/5 rounded-lg border border-primary/20">
+              <h3 className="text-lg font-semibold mb-2 text-primary">AI Summary</h3>
+              <p className="text-base-content/80">{ticket.summary}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Additional Details */}
+      {(ticket.relatedSkills?.length > 0 || ticket.helpfulNotes) && (
+        <div className="card bg-base-100 shadow-xl border border-base-300 animate-slide-up">
+          <div className="card-body">
+            <h2 className="card-title text-xl mb-4">
+              <Tag className="w-5 h-5" />
+              Additional Information
+            </h2>
 
             {ticket.relatedSkills?.length > 0 && (
-              <p>
-                <strong>Related Skills:</strong>{" "}
-                {ticket.relatedSkills.join(", ")}
-              </p>
-            )}
-
-            {ticket.helpfulNotes && (
-              <div>
-                <strong>Helpful Notes:</strong>
-                <div className="prose max-w-none rounded mt-2">
-                  <ReactMarkdown>{ticket.helpfulNotes}</ReactMarkdown>
+              <div className="mb-6">
+                <h3 className="font-semibold mb-2">Related Skills</h3>
+                <div className="flex flex-wrap gap-2">
+                  {ticket.relatedSkills.map((skill, index) => (
+                    <span key={index} className="badge badge-primary badge-outline">
+                      {skill}
+                    </span>
+                  ))}
                 </div>
               </div>
             )}
 
-            {ticket.assignedTo && (
-              <p>
-                <strong>Assigned To:</strong> {ticket.assignedTo?.email}
-              </p>
+            {ticket.helpfulNotes && (
+              <div>
+                <h3 className="font-semibold mb-2">Helpful Notes</h3>
+                <div className="prose prose-sm max-w-none bg-base-200 p-4 rounded-lg border">
+                  <ReactMarkdown>{ticket.helpfulNotes}</ReactMarkdown>
+                </div>
+              </div>
             )}
-
-            {ticket.createdAt && (
-              <p className="text-sm text-gray-800 mt-2">
-                Created At: {new Date(ticket.createdAt).toLocaleString()}
-              </p>
-            )}
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
