@@ -27,17 +27,8 @@ app.set("trust proxy", 1); // Required for Render
 // --------------------
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-
-    const allowedOrigins = [
-      "https://help-desk-pro-1.onrender.com",
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "http://localhost:4173",
-    ];
-
-    if (allowedOrigins.includes(origin)) callback(null, true);
-    else callback(null, true); // allow all in dev
+    // Allow all origins for now
+    callback(null, true);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
