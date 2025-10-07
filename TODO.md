@@ -1,4 +1,9 @@
 - [x] Import Zod in backend/utils/ai.js
 - [x] Define Zod schema for AI response (summary, priority, helpfulNotes, relatedSkills)
 - [x] Replace manual JSON parsing with Zod safeParse validation
-- [ ] Test the changes with Inngest dev
+- [x] Test the changes with Inngest dev
+- [ ] Fix typo in AI prompt: "helpFulNotes" to "helpfulNotes"
+- [ ] Add summary display in frontend ticket details page
+- [ ] Test end-to-end AI functionality: create ticket, verify AI analysis triggers and saves
+- [ ] Verify AI responses are displayed correctly in UI
+- [ ] Test ticket creation flow with AI analysis

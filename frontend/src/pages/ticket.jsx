@@ -49,6 +49,12 @@ export default function TicketDetailsPage() {
         <h3 className="text-xl font-semibold">{ticket.title}</h3>
         <p>{ticket.description}</p>
 
+        {ticket.summary && (
+          <div>
+            <strong>Summary:</strong> {ticket.summary}
+          </div>
+        )}
+
         {/* Conditionally render extended details */}
         {ticket.status && (
           <>
