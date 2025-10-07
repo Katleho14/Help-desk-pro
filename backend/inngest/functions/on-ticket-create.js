@@ -10,50 +10,66 @@ export const onTicketCreated = inngest.createFunction(
   { event: "ticket/created" },
   async ({ event, step }) => {
     try {
-      const { ticketId } = event.data;
+      const { ticketId, title, description, createdBy } = event.data;
       console.log("🎟️ Ticket event received:", event.data);
 
-      // Step 1: Fetch ticket
+      // ✅ Step 1: Fetch the ticket from DB
       const ticket = await step.run("fetch-ticket", async () => {
         const ticketObject = await Ticket.findById(ticketId);
         if (!ticketObject) throw new NonRetriableError("Ticket not found");
         return ticketObject;
       });
 
-      // Step 2: Set initial status
+      // ✅ Step 2: Update initial status to indicate AI processing
       await step.run("update-status", async () => {
-        await Ticket.findByIdAndUpdate(ticket._id, { status: "TODO" });
+        await Ticket.findByIdAndUpdate(ticket._id, { status: "PROCESSING" });
       });
 
-      // Step 3: AI Analysis
-      console.log("🤖 Sending to AI...");
-      const aiResponse = await analyzeTicket(ticket);
-      console.log("🧠 AI Response:", aiResponse);
+      // ✅ Step 3: AI Analysis via OpenAI
+      console.log("🤖 Sending ticket to AI...");
+      const aiResponse = await step.run("analyze-ticket", async () => {
+        const result = await analyzeTicket({
+          title: ticket.title,
+          description: ticket.description,
+        });
+        console.log("🧠 AI Response:", result);
+        return result;
+      });
 
-      const relatedSkills = await step.run("ai-processing", async () => {
+      // ✅ Step 4: Save AI results to MongoDB
+      const relatedSkills = await step.run("update-ticket-with-ai", async () => {
         if (aiResponse) {
-          const priority = ["low", "medium", "high"].includes(aiResponse.priority)
+          const validPriority = ["low", "medium", "high"].includes(aiResponse.priority)
             ? aiResponse.priority
             : "medium";
 
           await Ticket.findByIdAndUpdate(ticket._id, {
-            priority,
-            helpfulNotes: aiResponse.helpfulNotes || "",
-            status: "IN_PROGRESS",
-            relatedSkills: aiResponse.relatedSkills || [],
             summary: aiResponse.summary || "",
+            priority: validPriority,
+            helpfulNotes: aiResponse.helpfulNotes || "",
+            relatedSkills: aiResponse.relatedSkills || [],
+            status: "IN_PROGRESS",
           });
+
           return aiResponse.relatedSkills || [];
+        } else {
+          console.warn("⚠️ No AI response received for ticket:", ticketId);
+          return [];
         }
-        return [];
       });
 
-      // Step 4: Assign moderator
+      // ✅ Step 5: Assign a moderator (by matching skills)
       const moderator = await step.run("assign-moderator", async () => {
-        let user = await User.findOne({
-          role: "moderator",
-          skills: { $elemMatch: { $regex: relatedSkills.join("|"), $options: "i" } },
-        });
+        let user = null;
+
+        if (relatedSkills.length > 0) {
+          user = await User.findOne({
+            role: "moderator",
+            skills: { $elemMatch: { $regex: relatedSkills.join("|"), $options: "i" } },
+          });
+        }
+
+        // fallback to admin if no moderator matches
         if (!user) user = await User.findOne({ role: "admin" });
 
         await Ticket.findByIdAndUpdate(ticket._id, { assignedTo: user?._id || null });
@@ -61,21 +77,21 @@ export const onTicketCreated = inngest.createFunction(
         return user;
       });
 
-      // Step 5: Notify moderator
-      await step.run("send-email", async () => {
+      // ✅ Step 6: Notify moderator via email
+      await step.run("send-notification-email", async () => {
         if (moderator) {
           await sendMail(
             moderator.email,
-            "New Ticket Assigned",
-            `A new ticket has been assigned: ${ticket.title}`
+            "🎟️ New Ticket Assigned",
+            `A new ticket titled "${title}" has been assigned to you.`
           );
         }
       });
 
-      console.log("✅ Ticket processed successfully.");
+      console.log("✅ Ticket processed successfully with AI insights and moderator assignment.");
       return { success: true };
     } catch (err) {
-      console.error("❌ Error in onTicketCreated:", err.message);
+      console.error("❌ Error in onTicketCreated:", err);
       return { success: false, error: err.message };
     }
   }
