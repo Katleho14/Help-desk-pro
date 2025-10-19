@@ -14,18 +14,9 @@ export const onTicketCreated = inngest.createFunction(
       const { ticketId, title, description } = event.data;
       console.log("🎟️ Ticket event received:", event.data);
 
-      // We skip fetching the ticket again (Step 1 from previous version) as it's already in the event,
-      // and immediately proceed to set the status to PROCESSING, giving the frontend confirmation.
-      // NOTE: The initial status change in the controller is actually done by default
-      // by Mongoose (status: "TODO"). The inngest job updates it to "IN_PROGRESS" after AI is done.
-
-      // We will keep Step 2 as a quick update to confirm processing has started, which the frontend can show.
-      // ✅ Step 2: Update initial status to indicate AI processing
-      await step.run("update-status-to-processing", async () => {
-        await Ticket.findByIdAndUpdate(ticketId, { status: "PROCESSING" });
-      });
-
-      // ✅ Step 3: AI Analysis via OpenAI - using event data directly
+      // We rely on the controller to have set the initial status to "PROCESSING".
+      
+      // ✅ Step 1: AI Analysis via OpenAI - using event data directly
       console.log("🤖 Sending ticket to AI...");
       const aiResponse = await step.run("analyze-ticket", async () => {
         // Use title and description directly from the event data for the AI call
@@ -37,73 +28,83 @@ export const onTicketCreated = inngest.createFunction(
         return result;
       });
 
-      // ✅ Step 4: Save AI results to MongoDB
-      const relatedSkills = await step.run("update-ticket-with-ai", async () => {
-        if (aiResponse && !aiResponse.error) {
-          // Normalize priority value to prevent schema issues
-          const validPriority = ["low", "medium", "high"].includes(aiResponse.priority?.toLowerCase())
-            ? aiResponse.priority.toLowerCase()
-            : "medium";
+      let updatedTicket = null;
+      let moderator = null;
+      let finalStatus = "OPEN";
+      let relatedSkills = [];
+      let validPriority = "medium";
+      
+      // Check if AI response is valid and proceed with processing
+      if (aiResponse && !aiResponse.error && aiResponse.summary) {
+        
+        // Normalize priority value to prevent schema issues
+        validPriority = ["low", "medium", "high"].includes(aiResponse.priority?.toLowerCase())
+          ? aiResponse.priority.toLowerCase()
+          : "medium";
 
-          // Use findByIdAndUpdate on the specific ticketId
-          const updatedTicket = await Ticket.findByIdAndUpdate(
+        relatedSkills = aiResponse.relatedSkills || [];
+        finalStatus = "IN_PROGRESS";
+        
+        // ✅ Step 2: Assign a moderator (by matching skills)
+        moderator = await step.run("assign-moderator", async () => {
+          let user = null;
+
+          if (relatedSkills.length > 0) {
+            user = await User.findOne({
+              role: "moderator",
+              // Find users that have at least one of the required skills
+              skills: { $in: relatedSkills },
+            });
+          }
+
+          // fallback to admin if no moderator matches
+          if (!user) {
+              user = await User.findOne({ role: "admin" });
+          }
+          
+          console.log("👤 Assigned moderator:", user?.email || "None");
+          return user;
+        });
+        
+        // ✅ Step 3: Save ALL AI results and assignment to MongoDB
+        updatedTicket = await step.run("update-ticket-with-ai-and-assignment", async () => {
+          
+          const updateData = {
+            summary: aiResponse.summary || "",
+            priority: validPriority,
+            helpfulNotes: aiResponse.helpfulNotes || "",
+            relatedSkills: relatedSkills,
+            status: finalStatus, // Set status to IN_PROGRESS
+            assignedTo: moderator?._id || null, // Set assigned moderator ID
+          };
+          
+          const result = await Ticket.findByIdAndUpdate(
             ticketId,
-            {
-              summary: aiResponse.summary || "",
-              priority: validPriority,
-              helpfulNotes: aiResponse.helpfulNotes || "",
-              relatedSkills: aiResponse.relatedSkills || [],
-              status: "IN_PROGRESS", // Change status to IN_PROGRESS after analysis
-            },
+            updateData,
             { new: true } // Return the updated document
           );
           
-          if (!updatedTicket) {
+          if (!result) {
              throw new NonRetriableError(`Ticket not found by ID: ${ticketId}`);
           }
           
-          // Only return skills if present
-          return aiResponse.relatedSkills || [];
+          return result;
+        });
 
-        } else {
-          console.warn("⚠️ No valid AI response received for ticket or AI error:", ticketId, aiResponse.error);
-          
-          // Update status to keep it visible, but mark as open since analysis failed
-          await Ticket.findByIdAndUpdate(ticketId, { status: "OPEN" }); 
-          
-          return [];
-        }
-      });
+      } else {
+        // AI analysis failed or returned insufficient data
+        console.warn("⚠️ AI analysis failed. Setting status to OPEN.");
+        updatedTicket = await Ticket.findByIdAndUpdate(
+            ticketId, 
+            { status: finalStatus }, // Set status to OPEN
+            { new: true }
+        );
+      }
 
-      // ✅ Step 5: Assign a moderator (by matching skills)
-      const moderator = await step.run("assign-moderator", async () => {
-        let user = null;
 
-        if (relatedSkills.length > 0) {
-          // Find moderator whose skills array contains any of the relatedSkills
-          user = await User.findOne({
-            role: "moderator",
-            // This query finds users where at least one element in their 'skills' array 
-            // is also present in the 'relatedSkills' array from the AI response.
-            skills: { $in: relatedSkills },
-          });
-        }
-
-        // fallback to admin if no moderator matches
-        if (!user) {
-             user = await User.findOne({ role: "admin" });
-        }
-        
-        // Final update with assignment status
-        await Ticket.findByIdAndUpdate(ticketId, { assignedTo: user?._id || null });
-        console.log("👤 Assigned moderator:", user?.email || "None");
-        return user;
-      });
-
-      // ✅ Step 6: Notify moderator via email
+      // ✅ Step 4: Notify moderator via email (Only if assignment was successful)
       await step.run("send-notification-email", async () => {
         if (moderator) {
-          // Fetch the creator's email to include it in the notification
           const creator = await User.findById(event.data.createdBy);
           
           await sendMail(
@@ -113,29 +114,30 @@ export const onTicketCreated = inngest.createFunction(
 
 ---
 Ticket Summary: ${aiResponse.summary || 'N/A'}
-Priority: ${aiResponse.priority || 'Medium'}
+Priority: ${validPriority}
 Assigned to: ${moderator.email}
 Created by: ${creator?.email || 'Unknown User'}
 ---
-`
+Notes for Agent:
+${aiResponse.helpfulNotes || 'No specific notes provided by AI.'}`
           );
         }
       });
 
       console.log("✅ Ticket processed successfully with AI insights and moderator assignment.");
-      return { success: true };
+      return { success: true, status: finalStatus };
     } catch (err) {
-      // Important: if the error is due to something transient (like network issues), Inngest will retry.
-      // If it's a permanent error (like "Ticket not found"), throwing NonRetriableError prevents retries.
       console.error("❌ Error in onTicketCreated:", err);
-      // Re-throw if it's a non-retriable error, otherwise allow retry
+      // Attempt to set status to ERROR for visibility if we can
+      await step.run("update-status-to-error", async () => {
+          await Ticket.findByIdAndUpdate(ticketId, { status: "ERROR" });
+      });
+
+      // Re-throw NonRetriableError to prevent endless retries on invalid data
       if (err instanceof NonRetriableError) {
          throw err;
       }
-      // You might want to update the ticket status to 'ERROR' here too for visibility.
-      // await Ticket.findByIdAndUpdate(event.data.ticketId, { status: "ERROR" }); 
       return { success: false, error: err.message };
     }
   }
 );
-
