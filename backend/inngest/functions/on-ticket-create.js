@@ -9,12 +9,12 @@ export const onTicketCreated = inngest.createFunction(
   { id: "on-ticket-created", retries: 2 },
   { event: "ticket/created" },
   async ({ event, step }) => {
-    try {
-      // Destructure necessary data directly from the event payload
-      const { ticketId, title, description } = event.data;
-      console.log("🎟️ Ticket event received:", event.data);
+    // Variable to hold the final ticket object, used for email if successful
+    let updatedTicket = null;
+    const { ticketId, title, description } = event.data;
 
-      // We rely on the controller to have set the initial status to "PROCESSING".
+    try {
+      console.log("🎟️ Ticket event received:", event.data);
       
       // ✅ Step 1: AI Analysis via OpenAI - using event data directly
       console.log("🤖 Sending ticket to AI...");
@@ -28,7 +28,6 @@ export const onTicketCreated = inngest.createFunction(
         return result;
       });
 
-      let updatedTicket = null;
       let moderator = null;
       let finalStatus = "OPEN";
       let relatedSkills = [];
@@ -37,7 +36,7 @@ export const onTicketCreated = inngest.createFunction(
       // Check if AI response is valid and proceed with processing
       if (aiResponse && !aiResponse.error && aiResponse.summary) {
         
-        // Normalize priority value to prevent schema issues
+        // Normalize priority value to prevent schema issues, default to 'medium'
         validPriority = ["low", "medium", "high"].includes(aiResponse.priority?.toLowerCase())
           ? aiResponse.priority.toLowerCase()
           : "medium";
@@ -85,24 +84,32 @@ export const onTicketCreated = inngest.createFunction(
           );
           
           if (!result) {
+             // If the ticket doesn't exist, we can't do anything, so throw non-retriable error
              throw new NonRetriableError(`Ticket not found by ID: ${ticketId}`);
           }
           
           return result;
         });
 
+        // The job succeeded, proceed to notification (Step 4)
+
       } else {
-        // AI analysis failed or returned insufficient data
-        console.warn("⚠️ AI analysis failed. Setting status to OPEN.");
-        updatedTicket = await Ticket.findByIdAndUpdate(
-            ticketId, 
-            { status: finalStatus }, // Set status to OPEN
-            { new: true }
-        );
+        // AI analysis failed or returned insufficient data (aiResponse.summary is missing)
+        // Since we are relying on the controller setting it to "PROCESSING" initially,
+        // we explicitly set it back to "OPEN" to signal failure of processing pipeline.
+        console.warn("⚠️ AI analysis failed or returned insufficient data. Setting status to OPEN.");
+        updatedTicket = await step.run("update-status-to-open-on-ai-failure", async () => {
+            return await Ticket.findByIdAndUpdate(
+                ticketId, 
+                { status: "OPEN" }, 
+                { new: true }
+            );
+        });
+        // Skip email notification as there's no assignment
       }
 
 
-      // ✅ Step 4: Notify moderator via email (Only if assignment was successful)
+      // ✅ Step 4: Notify moderator via email (Only if moderator was assigned)
       await step.run("send-notification-email", async () => {
         if (moderator) {
           const creator = await User.findById(event.data.createdBy);
@@ -127,7 +134,8 @@ ${aiResponse.helpfulNotes || 'No specific notes provided by AI.'}`
       console.log("✅ Ticket processed successfully with AI insights and moderator assignment.");
       return { success: true, status: finalStatus };
     } catch (err) {
-      console.error("❌ Error in onTicketCreated:", err);
+      console.error(`❌ Error processing ticket ${ticketId}:`, err);
+      
       // Attempt to set status to ERROR for visibility if we can
       await step.run("update-status-to-error", async () => {
           await Ticket.findByIdAndUpdate(ticketId, { status: "ERROR" });
