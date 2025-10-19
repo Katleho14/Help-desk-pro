@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { ArrowLeft, Calendar, User, Tag, AlertTriangle, AlertCircle, Info, Clock, CheckCircle, Hash } from "lucide-react";
@@ -11,7 +11,13 @@ export default function TicketDetailsPage() {
 
   const token = localStorage.getItem("token");
 
+  // --- START OF FIX: Implement Polling for AI Updates ---
+  const initialFetchDone = useRef(false);
+
   useEffect(() => {
+    let intervalId = null;
+    let isMounted = true; 
+
     const fetchTicket = async () => {
       try {
         const res = await fetch(
@@ -23,21 +29,58 @@ export default function TicketDetailsPage() {
           }
         );
         const data = await res.json();
-        if (res.ok) {
-          setTicket(data.ticket);
-        } else {
-          alert(data.message || "Failed to fetch ticket");
+        
+        if (isMounted) {
+          if (res.ok) {
+            setTicket(data.ticket);
+            
+            // Check if the AI analysis (summary) is complete
+            if (data.ticket?.summary) {
+              if (intervalId) {
+                // AI data is ready, stop polling
+                clearInterval(intervalId);
+                intervalId = null; 
+                console.log("Polling stopped: AI summary received.");
+              }
+            }
+          } else {
+            console.error(data.message || "Failed to fetch ticket");
+            // Stop polling on a permanent error like 404 or authentication failure
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null; 
+            }
+          }
         }
       } catch (err) {
-        console.error(err);
-        alert("Something went wrong");
+        console.error("Fetch/Polling error:", err);
       } finally {
-        setLoading(false);
+        // Use a ref to track that we've completed the initial fetch instead of reading `loading`
+        if (isMounted && !initialFetchDone.current) {
+            initialFetchDone.current = true;
+            setLoading(false);
+        }
       }
     };
 
+    // Initial fetch when the component mounts
     fetchTicket();
-  }, [id]);
+    
+    // Start polling every 5 seconds if we expect AI processing
+    // Note: If the summary is already present from the initial fetch, this interval
+    // will be cleared by the logic above after the first run.
+    intervalId = setInterval(fetchTicket, 5000); 
+
+    // Cleanup function to clear the interval when the component unmounts
+    return () => {
+      isMounted = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [id, token]);
+  // --- END OF FIX ---
+
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -59,19 +102,25 @@ export default function TicketDetailsPage() {
 
   const getStatusIcon = (status) => {
     switch (status?.toLowerCase()) {
-      case "open": return <Clock className="w-5 h-5 text-warning" />;
+      case "open": 
+      case "todo": 
+      case "processing": // Added processing status handling
+        return <Clock className="w-5 h-5 text-warning" />;
       case "in progress": return <AlertCircle className="w-5 h-5 text-info" />;
-      case "resolved": return <CheckCircle className="w-5 h-5 text-success" />;
-      case "closed": return <CheckCircle className="w-5 h-5 text-base-content/50" />;
+      case "resolved": 
+      case "closed":
+        return <CheckCircle className="w-5 h-5 text-success" />;
       default: return <Clock className="w-5 h-5 text-base-content/50" />;
     }
   };
 
   const getProgressWidth = (status) => {
     switch (status?.toLowerCase()) {
-      case "open": return "33%";
+      case "todo":
+      case "open": return "10%";
+      case "processing": return "33%"; // Processing takes some time
       case "in progress": return "66%";
-      case "resolved": return "100%";
+      case "resolved": 
       case "closed": return "100%";
       default: return "0%";
     }
@@ -79,10 +128,12 @@ export default function TicketDetailsPage() {
 
   const getProgressColor = (status) => {
     switch (status?.toLowerCase()) {
-      case "open": return "bg-gradient-to-r from-warning to-warning/80";
+      case "todo":
+      case "open": return "bg-gradient-to-r from-warning/50 to-warning/30";
+      case "processing": return "bg-gradient-to-r from-info to-primary/80"; // Using info/primary for processing feedback
       case "in progress": return "bg-gradient-to-r from-info to-info/80";
-      case "resolved": return "bg-gradient-to-r from-success to-success/80";
-      case "closed": return "bg-gradient-to-r from-base-content/50 to-base-content/30";
+      case "resolved": 
+      case "closed": return "bg-gradient-to-r from-success to-success/80";
       default: return "bg-base-300";
     }
   };
@@ -188,7 +239,7 @@ export default function TicketDetailsPage() {
                     <div className={`badge ${getPriorityColor(ticket.priority)} px-4 py-2 text-sm font-semibold shadow-sm`}>
                       <span className="flex items-center gap-2">
                         {getPriorityIcon(ticket.priority)}
-                        {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)} Priority
+                        {ticket.priority ? ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1) : 'Unassigned'} Priority
                       </span>
                     </div>
                   </div>
@@ -214,9 +265,10 @@ export default function TicketDetailsPage() {
                     </div>
                   )}
 
+                  {/* Only show related skills if they exist (they are set by AI) */}
                   {ticket.relatedSkills?.length > 0 && (
                     <div>
-                      <label className="text-sm font-medium text-base-content/70 mb-2 block">Related Skills</label>
+                      <label className="text-sm font-medium text-base-content/70 mb-2 block">Related Skills (AI)</label>
                       <div className="flex flex-wrap gap-2">
                         {ticket.relatedSkills.map((skill, index) => (
                           <span key={index} className="badge badge-primary badge-outline px-3 py-1 shadow-sm hover:shadow-md transition-shadow">
@@ -251,59 +303,75 @@ export default function TicketDetailsPage() {
               </div>
             </div>
 
-            {/* AI Summary as Chat Bubble */}
-            {ticket.summary && (
-              <div className="animate-slide-in-right" style={{ animationDelay: '0.2s' }}>
-                <div className="flex items-start gap-4">
-                  <div className="avatar placeholder flex-shrink-0">
-                    <div className="bg-gradient-to-br from-primary to-primary-focus text-primary-content rounded-full w-12 h-12 flex items-center justify-center shadow-lg">
-                      <span className="text-xl">🤖</span>
+            {/* AI Status or Summary */}
+            {!ticket.summary ? (
+                 <div className="card bg-base-100 shadow-2xl border border-base-300 animate-slide-in-right">
+                    <div className="card-body">
+                        <h3 className="text-2xl font-bold text-info mb-4 flex items-center gap-3">
+                           <Clock className="w-6 h-6 text-info animate-spin" />
+                           AI Analysis in Progress...
+                        </h3>
+                        <p className="text-base-content/70">
+                            The AI assistant is currently analyzing the ticket content to determine priority, skills, and generate helpful notes. 
+                            This page will automatically update once the process is complete.
+                        </p>
                     </div>
-                  </div>
-                  <div className="flex-1">
-                    <div className="chat chat-start">
-                      <div className="chat-bubble chat-bubble-primary max-w-none shadow-xl border-0">
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="font-bold text-primary-content text-lg">AI Assistant</span>
-                          <span className="text-xs opacity-90 bg-primary-content/20 px-2 py-1 rounded-full">Just analyzed</span>
+                 </div>
+            ) : (
+                <>
+                    {/* AI Summary as Chat Bubble */}
+                    <div className="animate-slide-in-right" style={{ animationDelay: '0.2s' }}>
+                        <div className="flex items-start gap-4">
+                            <div className="avatar placeholder flex-shrink-0">
+                                <div className="bg-gradient-to-br from-primary to-primary-focus text-primary-content rounded-full w-12 h-12 flex items-center justify-center shadow-lg">
+                                    <span className="text-xl">🤖</span>
+                                </div>
+                            </div>
+                            <div className="flex-1">
+                                <div className="chat chat-start">
+                                    <div className="chat-bubble chat-bubble-primary max-w-none shadow-xl border-0">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <span className="font-bold text-primary-content text-lg">AI Assistant Summary</span>
+                                            <span className="text-xs opacity-90 bg-primary-content/20 px-2 py-1 rounded-full">Analysis Complete</span>
+                                        </div>
+                                        <p className="text-primary-content text-lg leading-relaxed m-0">{ticket.summary}</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <p className="text-primary-content text-lg leading-relaxed m-0">{ticket.summary}</p>
-                      </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
-            {/* Helpful Notes */}
-            {ticket.helpfulNotes && (
-              <div className="card bg-base-100 shadow-2xl border border-base-300 animate-slide-in-right" style={{ animationDelay: '0.4s' }}>
-                <div className="card-body">
-                  <h3 className="card-title text-2xl mb-6 flex items-center gap-3">
-                    <div className="p-2 bg-info/10 rounded-lg">
-                      <Info className="w-6 h-6 text-info" />
-                    </div>
-                    Helpful Notes
-                  </h3>
-                  <div className="prose prose-lg max-w-none bg-gradient-to-r from-info/5 to-info/10 p-6 rounded-xl border border-info/20 shadow-inner">
-                    <ReactMarkdown
-                      components={{
-                        h1: ({ children }) => <h1 className="text-2xl font-bold text-info mb-4">{children}</h1>,
-                        h2: ({ children }) => <h2 className="text-xl font-semibold text-info mb-3">{children}</h2>,
-                        h3: ({ children }) => <h3 className="text-lg font-medium text-info mb-2">{children}</h3>,
-                        p: ({ children }) => <p className="text-base-content/90 leading-relaxed mb-3">{children}</p>,
-                        ul: ({ children }) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
-                        ol: ({ children }) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
-                        li: ({ children }) => <li className="text-base-content/90">{children}</li>,
-                        code: ({ children }) => <code className="bg-base-100 px-2 py-1 rounded text-sm font-mono">{children}</code>,
-                        pre: ({ children }) => <pre className="bg-base-100 p-4 rounded-lg overflow-x-auto border">{children}</pre>,
-                      }}
-                    >
-                      {ticket.helpfulNotes}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              </div>
+                    {/* Helpful Notes */}
+                    {ticket.helpfulNotes && (
+                      <div className="card bg-base-100 shadow-2xl border border-base-300 animate-slide-in-right" style={{ animationDelay: '0.4s' }}>
+                        <div className="card-body">
+                          <h3 className="card-title text-2xl mb-6 flex items-center gap-3">
+                            <div className="p-2 bg-info/10 rounded-lg">
+                              <Info className="w-6 h-6 text-info" />
+                            </div>
+                            Helpful Notes (for Agent)
+                          </h3>
+                          <div className="prose prose-lg max-w-none bg-gradient-to-r from-info/5 to-info/10 p-6 rounded-xl border border-info/20 shadow-inner">
+                            <ReactMarkdown
+                              components={{
+                                h1: ({ children }) => <h1 className="text-2xl font-bold text-info mb-4">{children}</h1>,
+                                h2: ({ children }) => <h2 className="text-xl font-semibold text-info mb-3">{children}</h2>,
+                                h3: ({ children }) => <h3 className="text-lg font-medium text-info mb-2">{children}</h3>,
+                                p: ({ children }) => <p className="text-base-content/90 leading-relaxed mb-3">{children}</p>,
+                                ul: ({ children }) => <ul className="list-disc list-inside space-y-2 mb-3">{children}</ul>,
+                                ol: ({ children }) => <ol className="list-decimal list-inside space-y-2 mb-3">{children}</ol>,
+                                li: ({ children }) => <li className="text-base-content/90">{children}</li>,
+                                code: ({ children }) => <code className="bg-base-100 px-2 py-1 rounded text-sm font-mono">{children}</code>,
+                                pre: ({ children }) => <pre className="bg-base-100 p-4 rounded-lg overflow-x-auto border">{children}</pre>,
+                              }}
+                            >
+                              {ticket.helpfulNotes}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                </>
             )}
           </div>
         </div>
