@@ -11,10 +11,13 @@ export const createTicket = async (req, res) => {
         .json({ message: "Title and description are required" });
     }
 
+    // ⭐ FIX: Explicitly set the initial status to 'PROCESSING' 
+    // so the frontend immediately shows the "AI Analysis in Progress..." message.
     const newTicket = await Ticket.create({
       title,
       description,
       createdBy: req.user._id.toString(),
+      status: "PROCESSING", 
     });
 
     await inngest.send({
