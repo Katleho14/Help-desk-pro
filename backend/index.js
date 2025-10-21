@@ -14,6 +14,13 @@ import userRoutes from "./routes/user.js";
 import ticketRoutes from "./routes/ticket.js";
 import analyzeTicket from "./utils/ai.js"; // ✅ safe to import now (dotenv is ready)
 
+// Inngest Imports - **CRITICAL: Using standard import for reliability**
+import { serve } from "inngest/express";
+import { inngest } from "./inngest/client.js";
+import { onUserSignup } from "./inngest/functions/on-signup.js";
+import { onTicketCreated } from "./inngest/functions/on-ticket-create.js";
+
+
 // --------------------
 // ✅ Server Configuration
 // --------------------
@@ -95,19 +102,15 @@ try {
 }
 
 // --------------------
-// ✅ Inngest Integration
+// ✅ Inngest Integration (FIXED TO BE EXPLICIT)
 // --------------------
 try {
-  const { serve } = await import("inngest/express");
-  const { inngest } = await import("./inngest/client.js");
-  const { onUserSignup } = await import("./inngest/functions/on-signup.js");
-  const { onTicketCreated } = await import("./inngest/functions/on-ticket-create.js");
-
   // Quick check route
   app.get("/api/inngest/test", (req, res) => {
     res.json({ message: "✅ Inngest endpoint active" });
   });
 
+  // Use the explicitly imported modules
   app.use(
     "/api/inngest",
     serve({
@@ -117,9 +120,10 @@ try {
     })
   );
 
-  console.log("✅ Inngest routes loaded");
+  console.log("✅ Inngest routes loaded successfully");
 } catch (error) {
-  console.warn("⚠️ Inngest not available:", error.message);
+  console.error("❌ CRITICAL Inngest setup error:", error.message);
+  // Fail loudly if Inngest setup fails
 }
 
 // --------------------
@@ -235,4 +239,5 @@ process.on("unhandledRejection", (reason, promise) => {
 
 // Start the server
 startServer();
+
 
