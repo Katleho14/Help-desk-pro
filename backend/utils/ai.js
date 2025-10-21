@@ -2,6 +2,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import OpenAI from "openai";
+// ------------------ NEW Import Agent ------------------
+import { Agent } from "http";
+import { Agent as HttpsAgent } from "https";
+// ------------------------------------------------------
 
 // Resolve current directory so dotenv can find .env no matter where this runs
 // NOTE: On Render, environment variables are injected directly and this dotenv call is less critical
@@ -18,8 +22,18 @@ if (!apiKey) {
   console.error("❌ CRITICAL: AI API Key (GEMINI_API_KEY or OPENAI_API_KEY) is missing.");
 }
 
+// ------------------ NEW: Create Agent for fresh connections ------------------
+// Set keepAlive: false to force new connections for every request, which prevents
+// stale connection errors (like "Connection error") in deployed environments.
+const httpAgent = new Agent({ keepAlive: false });
+const httpsAgent = new HttpsAgent({ keepAlive: false });
+// -----------------------------------------------------------------------------
+
 const openai = new OpenAI({
   apiKey: apiKey,
+  // ------------------ NEW: Apply Agents ------------------
+  httpAgent: (url) => (url.protocol === 'http:' ? httpAgent : httpsAgent),
+  // -------------------------------------------------------
 });
 
 // --------------------
