@@ -13,18 +13,14 @@ export const onTicketCreated = inngest.createFunction(
     const { ticketId, title, description, createdBy } = event.data;
     const ticketObjectId = new mongoose.Types.ObjectId(ticketId);
     let aiResponse = null;
+    let validPriority = "medium"; // Default priority
+    let relatedSkills = [];
     let finalStatus = "OPEN";
-    let validPriority = "medium"; // Default to medium if AI fails
 
     try {
       console.log(`🎟️ Ticket event received for: ${ticketId}`);
 
-      // 1. Set Status to PROCESSING (Controller sets it to PROCESSING, we confirm here)
-      await step.run("set-status-processing", async () => {
-        await Ticket.findByIdAndUpdate(ticketObjectId, { status: "PROCESSING" });
-      });
-
-      // 2. AI Analysis via OpenAI
+      // 1. AI Analysis via OpenAI
       console.log("🤖 Sending ticket to AI for analysis...");
       aiResponse = await step.run("analyze-ticket", async () => {
         const result = await analyzeTicket({ title, description });
@@ -32,46 +28,44 @@ export const onTicketCreated = inngest.createFunction(
         return result;
       });
 
-      // 3. Process and Save AI results
-      let relatedSkills = [];
-      
-      if (aiResponse && aiResponse.summary) {
-        // Validate priority and use a default if invalid
-        const normalizedPriority = ["low", "medium", "high"].includes(aiResponse.priority?.toLowerCase())
-          ? aiResponse.priority.toLowerCase()
-          : "medium"; 
-        
-        validPriority = normalizedPriority;
-        relatedSkills = aiResponse.relatedSkills || [];
-        finalStatus = "IN_PROGRESS"; // Successful AI analysis means we can start working
+      // 2. Process and Save AI results
+      await step.run("process-and-save-ai-results", async () => {
+        // Assume failure/OPEN status initially
+        let updateData = {
+          status: "OPEN",
+          priority: validPriority,
+          summary: "AI analysis is currently unavailable or failed. Reviewing manually.",
+          helpfulNotes: "The automated analysis could not complete successfully. Please assign manually.",
+          relatedSkills: [],
+        };
 
-        await step.run("update-ticket-with-ai", async () => {
-          await Ticket.findByIdAndUpdate(ticketObjectId, {
-            summary: aiResponse.summary || "AI Summary not available.",
+        if (aiResponse && aiResponse.summary && aiResponse.priority) {
+          // If the AI returned valid data, update our local variables and the updateData object
+          const normalizedPriority = ["low", "medium", "high"].includes(aiResponse.priority.toLowerCase())
+            ? aiResponse.priority.toLowerCase()
+            : "medium";
+
+          validPriority = normalizedPriority;
+          relatedSkills = aiResponse.relatedSkills || [];
+          finalStatus = "IN_PROGRESS";
+
+          updateData = {
+            summary: aiResponse.summary,
             priority: validPriority,
             helpfulNotes: aiResponse.helpfulNotes || "No detailed notes provided by AI.",
             relatedSkills: relatedSkills,
             status: finalStatus,
-          });
-        });
-      } else {
-        // If AI response is completely missing/bad, log it and set status to OPEN
-        console.warn(`⚠️ AI response missing or invalid for ticket ${ticketId}. Setting status to OPEN.`);
+          };
+        } else {
+             // Use the default OPEN status and log the issue
+             console.warn(`⚠️ AI response missing key fields for ticket ${ticketId}. Setting status to OPEN.`);
+        }
         
-        await step.run("update-ticket-to-open", async () => {
-             await Ticket.findByIdAndUpdate(ticketObjectId, {
-                status: "OPEN", 
-                priority: validPriority, // Ensure priority has a value
-                summary: "AI analysis is currently unavailable. Reviewing manually." 
-             });
-        });
-        
-        // Skip assignment and email steps for non-actionable tickets
-        return { success: false, reason: "AI failed to return valid data" };
-      }
+        // Final database update using the determined updateData object
+        await Ticket.findByIdAndUpdate(ticketObjectId, updateData);
+      });
 
-
-      // 4. Assign a moderator (by matching skills)
+      // 3. Assign a moderator (this step now uses the updated 'relatedSkills' from step 2)
       const moderator = await step.run("assign-moderator", async () => {
         let user = null;
 
@@ -91,14 +85,14 @@ export const onTicketCreated = inngest.createFunction(
         return user;
       });
 
-      // 5. Notify moderator via email
+      // 4. Notify moderator via email
       await step.run("send-notification-email", async () => {
         if (moderator) {
           await sendMail(
             moderator.email,
             `🎟️ New Ticket Assigned: ${title}`,
             `A new ticket titled "${title}" has been assigned to you.
-            
+
             AI Summary: ${aiResponse?.summary || 'N/A'}
             Priority: ${validPriority}`
           );
