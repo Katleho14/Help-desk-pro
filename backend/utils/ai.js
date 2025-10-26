@@ -2,38 +2,32 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import OpenAI from "openai";
-// ------------------ NEW Import Agent ------------------
+// The 'http' and 'https' modules are core Node.js modules for creating custom agents.
 import { Agent } from "http";
 import { Agent as HttpsAgent } from "https";
-// ------------------------------------------------------
 
 // Resolve current directory so dotenv can find .env no matter where this runs
-// NOTE: On Render, environment variables are injected directly and this dotenv call is less critical
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 // --------------------
-// ✅ OpenAI Client Setup
+// ✅ OpenAI Client Setup (Fixed for OpenAI ONLY)
 // --------------------
-// Use GEMINI_API_KEY if available (as your original setup used Gemini) but fallback to OpenAI
-const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+const apiKey = process.env.OPENAI_API_KEY;
 
 if (!apiKey) {
-  console.error("❌ CRITICAL: AI API Key (GEMINI_API_KEY or OPENAI_API_KEY) is missing.");
+  console.error("❌ CRITICAL: AI API Key (OPENAI_API_KEY) is missing.");
 }
 
-// ------------------ NEW: Create Agent for fresh connections ------------------
-// Set keepAlive: false to force new connections for every request, which prevents
-// stale connection errors (like "Connection error") in deployed environments.
-const httpAgent = new Agent({ keepAlive: false });
-const httpsAgent = new HttpsAgent({ keepAlive: false });
-// -----------------------------------------------------------------------------
+// Create custom agents to explicitly disable connection keep-alive.
+// This is the essential fix for "Connection error" timeouts in cloud environments.
+const httpAgent = new Agent({ keepAlive: false, timeout: 25000 });
+const httpsAgent = new HttpsAgent({ keepAlive: false, timeout: 25000 });
 
 const openai = new OpenAI({
   apiKey: apiKey,
-  // ------------------ NEW: Apply Agents ------------------
+  // Use the custom agents for all HTTP/HTTPS traffic
   httpAgent: (url) => (url.protocol === 'http:' ? httpAgent : httpsAgent),
-  // -------------------------------------------------------
 });
 
 // --------------------
@@ -58,12 +52,11 @@ Ticket Details:
 - Description: ${ticket.description}
 `;
 
+    // Increased timeout is handled by the custom agent configuration above.
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.3,
-      // Add a higher timeout for the API request itself for deployment stability
-      timeout: 25000, // 25 seconds API timeout
     });
 
     const raw = completion.choices?.[0]?.message?.content?.trim() || "";
@@ -93,7 +86,7 @@ Ticket Details:
         error: `API Call Failed: ${errorMessage.substring(0, 50)}...`,
         summary: "AI analysis failed due to deployment API error.",
         priority: "medium",
-        // Edited this line to ensure the full error message is used in the notes
+        // This helpful note remains the key diagnostic message.
         helpfulNotes: `### Deployment Error\n\n**API Call Failed:** \`${errorMessage}\`\n\nThis likely indicates a network timeout, resource constraint, or invalid API key configuration on the Render server.`,
         relatedSkills: []
     };
@@ -101,3 +94,4 @@ Ticket Details:
 };
 
 export default analyzeTicket;
+
