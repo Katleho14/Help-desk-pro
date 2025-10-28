@@ -1,3 +1,10 @@
+/**
+ * utils/ai.js
+ * -------------
+ * Handles AI analysis for support tickets using OpenAI's API.
+ * Includes retry logic, JSON parsing safeguards, and Render-friendly network settings.
+ */
+
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
@@ -6,13 +13,13 @@ import { Agent } from "http";
 import { Agent as HttpsAgent } from "https";
 
 // --------------------
-// 🌍 Load Environment Variables
+// 🌍 Load environment variables
 // --------------------
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 // --------------------
-// 🔐 Validate OpenAI API Key
+// 🔐 Validate API key
 // --------------------
 const apiKey = process.env.OPENAI_API_KEY;
 
@@ -22,14 +29,13 @@ if (!apiKey) {
 }
 
 // --------------------
-// ⚙️ Setup HTTP/HTTPS Agents
-// Disable keep-alive to avoid Render connection timeouts
+// ⚙️ Configure HTTP agents (Render-safe)
 // --------------------
 const httpAgent = new Agent({ keepAlive: false, timeout: 25000 });
 const httpsAgent = new HttpsAgent({ keepAlive: false, timeout: 25000 });
 
 // --------------------
-// 🤖 Initialize OpenAI Client (fixed config)
+// 🤖 Initialize OpenAI client
 // --------------------
 const openai = new OpenAI({
   apiKey,
@@ -39,7 +45,7 @@ const openai = new OpenAI({
 });
 
 // --------------------
-// 🧠 Helper: Retry Logic with Exponential Backoff
+// 🔁 Retry logic with exponential backoff
 // --------------------
 const callOpenAI = async (prompt, retries = 3) => {
   for (let i = 0; i < retries; i++) {
@@ -54,13 +60,13 @@ const callOpenAI = async (prompt, retries = 3) => {
     } catch (err) {
       console.warn(`⚠️ OpenAI call failed (Attempt ${i + 1}/${retries}): ${err.message}`);
       if (i === retries - 1) throw err;
-      await new Promise((res) => setTimeout(res, 1000 * (i + 1))); // Exponential delay
+      await new Promise((r) => setTimeout(r, 1000 * (i + 1))); // Wait before retry
     }
   }
 };
 
 // --------------------
-// 🚀 Main Function: Analyze Ticket
+// 🧠 Analyze Ticket Function
 // --------------------
 const analyzeTicket = async (ticket) => {
   try {
@@ -73,7 +79,7 @@ The output MUST conform to the following JSON structure exactly:
   "summary": "Short, concise issue summary",
   "priority": "low | medium | high",
   "helpfulNotes": "Technical notes or troubleshooting suggestions using Markdown format (e.g., headers, bullet points).",
-  "relatedSkills": ["React", "MongoDB", "node.js"]
+  "relatedSkills": ["React", "MongoDB", "Node.js"]
 }
 
 Ticket Details:
@@ -81,7 +87,6 @@ Ticket Details:
 - Description: ${ticket.description}
 `;
 
-    // Call OpenAI with retry and timeout logic
     const completion = await callOpenAI(prompt);
     const raw = completion.choices?.[0]?.message?.content?.trim() || "";
     console.log("⚡ Raw AI output:", raw);
@@ -92,29 +97,19 @@ Ticket Details:
     } catch (parseError) {
       console.error("❌ JSON Parse Error. Attempting salvage:", parseError.message);
       const match = raw.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          return JSON.parse(match[0]);
-        } catch (salvageError) {
-          console.error("❌ Salvage Failed:", salvageError.message);
-          return {
-            error: "Failed to parse AI response, even after salvage.",
-            raw,
-          };
-        }
-      }
-      return { error: "No valid JSON found in AI response.", raw };
+      if (match) return JSON.parse(match[0]);
+      throw new Error("No valid JSON found in AI response.");
     }
   } catch (error) {
     const errorMessage = error.message || "Unknown OpenAI API Error";
-    console.error("❌ Error during OpenAI API call:", errorMessage);
+    console.error("❌ analyzeTicket failed:", errorMessage);
 
-    // Structured fallback response
+    // Fallback structured response
     return {
       error: `API Call Failed: ${errorMessage.substring(0, 80)}...`,
       summary: "AI analysis failed due to API connection error.",
       priority: "medium",
-      helpfulNotes: `### Deployment Error\n\n**API Call Failed:** \`${errorMessage}\`\n\nThis likely indicates one of the following:\n- Network timeout or blocked outbound request on Render.\n- Invalid or missing \`OPENAI_API_KEY\`.\n- Render free tier network sandbox issue.\n- Excessive keep-alive connections or resource constraints.\n\n**Recommended Fixes:**\n1. Verify the \`OPENAI_API_KEY\` is correctly set in Render Environment Variables.\n2. Redeploy after saving.\n3. If error persists, restart the Render service to clear stuck connections.`,
+      helpfulNotes: `### Deployment Error\n\n**API Call Failed:** \`${errorMessage}\`\n\nPossible causes:\n- Missing or invalid OPENAI_API_KEY\n- Render network timeout\n- Blocked outbound requests\n\n**Fix Suggestions:**\n1. Verify the OPENAI_API_KEY in Render Environment Variables.\n2. Redeploy the service.\n3. If using the free Render plan, upgrade to enable outbound networking.`,
       relatedSkills: [],
     };
   }
