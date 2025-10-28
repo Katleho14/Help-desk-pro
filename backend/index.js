@@ -14,12 +14,11 @@ import userRoutes from "./routes/user.js";
 import ticketRoutes from "./routes/ticket.js";
 import analyzeTicket from "./utils/ai.js"; // ✅ safe to import now (dotenv is ready)
 
-// Inngest Imports - **CRITICAL: Using standard import for reliability**
+// Inngest Imports
 import { serve } from "inngest/express";
 import { inngest } from "./inngest/client.js";
 import { onUserSignup } from "./inngest/functions/on-signup.js";
 import { onTicketCreated } from "./inngest/functions/on-ticket-create.js";
-
 
 // --------------------
 // ✅ Server Configuration
@@ -34,8 +33,7 @@ app.set("trust proxy", 1); // Required for Render
 // --------------------
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow all origins for now
-    callback(null, true);
+    callback(null, true); // allow all origins
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -75,7 +73,7 @@ app.get("/", (req, res) => {
       auth: "/api/auth/*",
       tickets: "/api/tickets/*",
       inngest: "/api/inngest/*",
-      testAI: "/api/test-ai",
+      testAI: "/api/test/test-ai",
     },
     timestamp: new Date().toISOString(),
   });
@@ -102,15 +100,13 @@ try {
 }
 
 // --------------------
-// ✅ Inngest Integration (FIXED TO BE EXPLICIT)
+// ✅ Inngest Integration
 // --------------------
 try {
-  // Quick check route
   app.get("/api/inngest/test", (req, res) => {
     res.json({ message: "✅ Inngest endpoint active" });
   });
 
-  // Use the explicitly imported modules
   app.use(
     "/api/inngest",
     serve({
@@ -123,14 +119,15 @@ try {
   console.log("✅ Inngest routes loaded successfully");
 } catch (error) {
   console.error("❌ CRITICAL Inngest setup error:", error.message);
-  // Fail loudly if Inngest setup fails
 }
 
 // --------------------
-// ✅ Test AI Route (OpenAI)
+// ✅ Test AI Route (GET)
 // --------------------
-app.post("/api/test-ai", async (req, res) => {
+app.get("/api/test/test-ai", async (req, res) => {
   try {
+    console.log("🚀 /api/test/test-ai called");
+
     const testTicket = {
       title: "React app not loading after deployment",
       description:
@@ -138,9 +135,11 @@ app.post("/api/test-ai", async (req, res) => {
     };
 
     const result = await analyzeTicket(testTicket);
+    console.log("✅ AI Result:", result);
+
     res.status(200).json({ success: true, result });
   } catch (error) {
-    console.error("❌ AI Test Error:", error.message);
+    console.error("❌ Error in /api/test/test-ai:", error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -180,7 +179,7 @@ app.use("*", (req, res) => {
       "/api/auth/*",
       "/api/tickets/*",
       "/api/inngest/*",
-      "/api/test-ai",
+      "/api/test/test-ai",
     ],
   });
 });
@@ -239,5 +238,6 @@ process.on("unhandledRejection", (reason, promise) => {
 
 // Start the server
 startServer();
+
 
 
