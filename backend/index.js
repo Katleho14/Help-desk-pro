@@ -165,7 +165,6 @@ app.use((err, req, res, next) => {
 });
 
 // --------------------
-// --------------------
 // ✅ Test route for OPENAI_API_KEY visibility
 // --------------------
 app.get("/api/test/env", (req, res) => {
@@ -177,13 +176,41 @@ app.get("/api/test/env", (req, res) => {
     });
   }
 
-  // Never expose the full key
   res.json({
     success: true,
     message: "✅ OPENAI_API_KEY is set!",
     preview: key.slice(0, 8) + "..." + key.slice(-4),
   });
 });
+
+
+// --------------------
+// ✅ Debug Network Route (add here, above the 404 handler)
+// --------------------
+import axios from "axios";
+
+app.get("/api/debug-network", async (req, res) => {
+  try {
+    const response = await axios.get("https://api.openai.com/v1/models", {
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      timeout: 5000,
+    });
+
+    res.json({
+      success: true,
+      message: "✅ Outbound network works!",
+      models: response.data.data?.slice(0, 3) || [],
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      message: "❌ Outbound network request failed",
+      error: error.message,
+      details: error.response?.data || null,
+    });
+  }
+});
+
 
 // --------------------
 // ✅ 404 Handler (must be last)
@@ -201,7 +228,8 @@ app.use("*", (req, res) => {
       "/api/tickets/*",
       "/api/inngest/*",
       "/api/test/test-ai",
-      "/api/test/env", // 👈 add this too for clarity
+      "/api/test/env",
+      "/api/debug-network", // 👈 add this here too
     ],
   });
 });
