@@ -165,6 +165,27 @@ app.use((err, req, res, next) => {
 });
 
 // --------------------
+// --------------------
+// ✅ Test route for OPENAI_API_KEY visibility
+// --------------------
+app.get("/api/test/env", (req, res) => {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) {
+    return res.status(500).json({
+      success: false,
+      message: "❌ OPENAI_API_KEY is missing from environment variables.",
+    });
+  }
+
+  // Never expose the full key
+  res.json({
+    success: true,
+    message: "✅ OPENAI_API_KEY is set!",
+    preview: key.slice(0, 8) + "..." + key.slice(-4),
+  });
+});
+
+// --------------------
 // ✅ 404 Handler (must be last)
 // --------------------
 app.use("*", (req, res) => {
@@ -180,9 +201,11 @@ app.use("*", (req, res) => {
       "/api/tickets/*",
       "/api/inngest/*",
       "/api/test/test-ai",
+      "/api/test/env", // 👈 add this too for clarity
     ],
   });
 });
+
 
 // --------------------
 // ✅ Database + Server Startup
