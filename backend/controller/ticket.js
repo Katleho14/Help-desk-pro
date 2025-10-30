@@ -5,6 +5,7 @@ import Ticket from "../models/ticket.js";
 export const createTicket = async (req, res) => {
   try {
     const { title, description } = req.body;
+
     if (!title || !description) {
       return res
         .status(400)
@@ -16,36 +17,36 @@ export const createTicket = async (req, res) => {
     const newTicket = await Ticket.create({
       title,
       description,
-      createdBy: req.user._id.toString(),
-      status: "PROCESSING", 
+      createdBy: req.user.id.toString(),
+      status: "PROCESSING",
     });
 
     try {
-      // ⭐ FIX: Ensure the system can handle a failed send event gracefully
+      // ⭐ Ensure event sending errors don't crash the system
       await inngest.send({
         name: "ticket/created",
         data: {
           ticketId: newTicket._id.toString(),
           title,
           description,
-          createdBy: req.user._id.toString(),
+          createdBy: req.user.id.toString(),
         },
       });
+
       console.log(`✅ Inngest event sent for ticket ${newTicket._id}`);
     } catch (inngestError) {
-      console.error("❌ CRITICAL: Failed to send Inngest event:", inngestError.message);
-      // We still allow the ticket to be created, but the user must be warned 
-      // that processing failed. We can update the status to ERROR/OPEN here
-      // if the event fails to send at all, but for now, we rely on the controller's logic
+      console.error(
+        "❌ CRITICAL: Failed to send Inngest event:",
+        inngestError.message
+      );
     }
-
 
     return res.status(201).json({
       message: "Ticket created and processing started",
       ticket: newTicket,
     });
   } catch (error) {
-    console.error("Error creating ticket", error.message);
+    console.error("Error creating ticket:", error.message);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -64,13 +65,17 @@ export const getTickets = async (req, res) => {
 
     let ticketsQuery;
     if (user.role !== "user") {
+      // Admin or agent — get all tickets
       ticketsQuery = Ticket.find(query)
         .populate("assignedTo", ["email", "_id"])
         .sort({ createdAt: -1 });
     } else {
-      query.createdBy = user._id;
+      // Regular user — only their own tickets
+      query.createdBy = user.id;
       ticketsQuery = Ticket.find(query)
-        .select("title description status priority createdAt helpfulNotes relatedSkills summary")
+        .select(
+          "title description status priority createdAt helpfulNotes relatedSkills summary"
+        )
         .sort({ createdAt: -1 });
     }
 
@@ -88,7 +93,7 @@ export const getTickets = async (req, res) => {
       page,
     });
   } catch (error) {
-    console.error("Error fetching tickets", error.message);
+    console.error("Error fetching tickets:", error.message);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -112,9 +117,11 @@ export const getTicket = async (req, res) => {
       ]);
     } else {
       ticket = await Ticket.findOne({
-        createdBy: user._id,
+        createdBy: user.id,
         _id: id,
-      }).select("title description status priority createdAt helpfulNotes relatedSkills summary");
+      }).select(
+        "title description status priority createdAt helpfulNotes relatedSkills summary"
+      );
     }
 
     if (!ticket) {

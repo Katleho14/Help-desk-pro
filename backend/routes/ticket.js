@@ -1,11 +1,12 @@
 import express from "express";
+import { authenticate } from "../middleware/auth.js";
 import { createTicket, getTicket, getTickets } from "../controller/ticket.js";
 
 const router = express.Router();
 
-// 🧪 TEMP: remove authenticate middleware for testing
-router.get("/", getTickets);
-router.get("/:id", getTicket);
-router.post("/", createTicket);
+// ✅ Re-enable authentication for all ticket routes
+router.get("/", authenticate, getTickets);
+router.get("/:id", authenticate, getTicket);
+router.post("/", authenticate, createTicket);
 
 export default router;
