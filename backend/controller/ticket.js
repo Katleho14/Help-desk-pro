@@ -12,31 +12,34 @@ export const createTicket = async (req, res) => {
         .json({ message: "Title and description are required" });
     }
 
-    // Set the initial status to 'PROCESSING' immediately so the frontend
-    // doesn't show 'OPEN' before the Inngest job can update it.
+    if (!req.user || !req.user._id) {
+      console.error("❌ req.user missing or invalid:", req.user);
+      return res.status(401).json({ message: "Unauthorized: Invalid user" });
+    }
+
+    const userId = req.user._id.toString();
+
     const newTicket = await Ticket.create({
       title,
       description,
-      createdBy: req.user.id.toString(),
+      createdBy: userId,
       status: "PROCESSING",
     });
 
     try {
-      // ⭐ Ensure event sending errors don't crash the system
       await inngest.send({
         name: "ticket/created",
         data: {
           ticketId: newTicket._id.toString(),
           title,
           description,
-          createdBy: req.user.id.toString(),
+          createdBy: userId,
         },
       });
-
       console.log(`✅ Inngest event sent for ticket ${newTicket._id}`);
     } catch (inngestError) {
       console.error(
-        "❌ CRITICAL: Failed to send Inngest event:",
+        "❌ Failed to send Inngest event:",
         inngestError.message
       );
     }
@@ -58,6 +61,10 @@ export const getTickets = async (req, res) => {
     const limit = parseInt(req.query.limit) || 5;
     const priority = req.query.priority;
 
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     let query = {};
     if (priority) {
       query.priority = priority;
@@ -65,13 +72,11 @@ export const getTickets = async (req, res) => {
 
     let ticketsQuery;
     if (user.role !== "user") {
-      // Admin or agent — get all tickets
       ticketsQuery = Ticket.find(query)
         .populate("assignedTo", ["email", "_id"])
         .sort({ createdAt: -1 });
     } else {
-      // Regular user — only their own tickets
-      query.createdBy = user.id;
+      query.createdBy = user._id;
       ticketsQuery = Ticket.find(query)
         .select(
           "title description status priority createdAt helpfulNotes relatedSkills summary"
@@ -87,11 +92,7 @@ export const getTickets = async (req, res) => {
     const count = await Ticket.countDocuments(query);
     const pages = Math.ceil(count / limit);
 
-    return res.status(200).json({
-      tickets,
-      pages,
-      page,
-    });
+    return res.status(200).json({ tickets, pages, page });
   } catch (error) {
     console.error("Error fetching tickets:", error.message);
     return res.status(500).json({ message: "Internal Server Error" });
@@ -103,7 +104,6 @@ export const getTicket = async (req, res) => {
     const user = req.user;
     const { id } = req.params;
 
-    // ✅ Validate ObjectId to avoid CastError
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "Invalid ticket ID" });
     }
@@ -117,7 +117,7 @@ export const getTicket = async (req, res) => {
       ]);
     } else {
       ticket = await Ticket.findOne({
-        createdBy: user.id,
+        createdBy: user._id,
         _id: id,
       }).select(
         "title description status priority createdAt helpfulNotes relatedSkills summary"
@@ -130,7 +130,7 @@ export const getTicket = async (req, res) => {
 
     return res.status(200).json({ ticket });
   } catch (error) {
-    console.error("Error fetching ticket:", error);
+    console.error("Error fetching ticket:", error.message);
     return res.status(500).json({ message: "Server error fetching ticket" });
   }
 };

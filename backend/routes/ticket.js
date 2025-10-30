@@ -4,9 +4,10 @@ import { createTicket, getTicket, getTickets } from "../controller/ticket.js";
 
 const router = express.Router();
 
-// ✅ Re-enable authentication for all ticket routes
+// ✅ All routes protected again
 router.get("/", authenticate, getTickets);
 router.get("/:id", authenticate, getTicket);
 router.post("/", authenticate, createTicket);
 
 export default router;
+
